@@ -1,0 +1,20 @@
+# Python bytecode & cache
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Environment
+.venv/
+env/
+venv/
+ENV/
+
+# Output test files
+*.xml
+*.png
+!static/
+
+# System / IDE
+.idea/
+.vscode/
+.system_generated/

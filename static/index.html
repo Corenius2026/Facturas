@@ -1,0 +1,251 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Minimarket Invoice AI - Procesador Inteligente de Facturas</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/styles.css">
+</head>
+<body>
+    <div class="background-blobs">
+        <div class="blob blob-1"></div>
+        <div class="blob blob-2"></div>
+    </div>
+
+    <div class="app-container">
+        <!-- Header Principal -->
+        <header class="header">
+            <div class="brand">
+                <div class="logo-box">
+                    <span class="logo-icon">🛒</span>
+                </div>
+                <div>
+                    <div class="brand-title-wrap">
+                        <h1>Minimarket<span class="brand-accent">Scan AI</span></h1>
+                        <span class="store-badge">🏪 Edición Tienda & Minimarket</span>
+                    </div>
+                    <p class="subtitle">Digitalización automática de facturas de proveedores a formato XML</p>
+                </div>
+            </div>
+            
+            <div class="header-widgets">
+                <div class="widget-chip">
+                    <span class="chip-icon">⚡</span>
+                    <div>
+                        <span class="chip-label">Motor OCR</span>
+                        <span class="chip-val">OpenCV + Tesseract</span>
+                    </div>
+                </div>
+            </div>
+        </header>
+
+        <!-- Stats Bar -->
+        <div class="stats-bar card">
+            <div class="stat-box">
+                <span class="stat-icon">🧾</span>
+                <div>
+                    <span class="stat-number" id="counterProcessed">100%</span>
+                    <span class="stat-desc">Procesamiento Automatizado</span>
+                </div>
+            </div>
+            <div class="stat-divider"></div>
+            <div class="stat-box">
+                <span class="stat-icon">📦</span>
+                <div>
+                    <span class="stat-number">XML Directo</span>
+                    <span class="stat-desc">Listo para Sistema de Inventario</span>
+                </div>
+            </div>
+            <div class="stat-divider"></div>
+            <div class="stat-box">
+                <span class="stat-icon">🔍</span>
+                <div>
+                    <span class="stat-number">Filtro OpenCV</span>
+                    <span class="stat-desc">Mejora de fotos borrosas</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Main Layout Grid -->
+        <main class="main-grid">
+            <!-- Left Panel: Upload & Controls -->
+            <section class="card upload-card">
+                <div class="card-header">
+                    <h2><span class="step-num">1</span> Cargar Factura de Proveedor</h2>
+                    <p class="section-desc">Sube la foto del recibo de compra de verduras, abarrotes o bebidas.</p>
+                </div>
+
+                <div class="dropzone" id="dropzone">
+                    <input type="file" id="fileInput" accept="image/*" class="file-input">
+                    <div class="dropzone-content">
+                        <div class="upload-icon-wrapper">
+                            <span class="upload-icon">📸</span>
+                        </div>
+                        <h3 class="upload-title">Arrastra la factura aquí</h3>
+                        <p class="upload-subtext">o <span class="highlight-link">explora tus archivos</span> (.png, .jpg, .jpeg)</p>
+                        <div class="file-preview-pill hidden" id="filePill">
+                            <span class="pill-icon">📄</span>
+                            <span class="pill-name" id="fileNameText">factura.jpg</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="actions-group">
+                    <button id="btnProcess" class="btn btn-primary" disabled>
+                        <span>🚀 Digitalizar y Generar XML</span>
+                    </button>
+                    <button id="btnSample" class="btn btn-secondary">
+                        <span>🧪 Cargar Factura de Ejemplo Minimarket</span>
+                    </button>
+                </div>
+
+                <!-- Info Minimarket -->
+                <div class="info-card">
+                    <div class="info-header">
+                        <span class="info-icon">💡</span>
+                        <strong>Optimizador de Lectura para Proveedores:</strong>
+                    </div>
+                    <p class="info-text">
+                        Ideal para procesar facturas de distribuidoras de alimentos, lacteos, bebidas y productos de consumo masivo.
+                    </p>
+                </div>
+            </section>
+
+            <!-- Right Panel: Results -->
+            <section class="results-panel">
+                <!-- Loader -->
+                <div id="loader" class="loader-overlay hidden">
+                    <div class="spinner-wrapper">
+                        <div class="spinner"></div>
+                        <span class="spinner-center">🧾</span>
+                    </div>
+                    <h3 id="loaderTitle">Analizando Factura del Minimarket...</h3>
+                    <p id="loaderText">Aplicando umbralización OpenCV (Otsu) y extrayendo montos...</p>
+                </div>
+
+                <!-- Estado Inicial Vacío -->
+                <div id="emptyState" class="card empty-card">
+                    <div class="empty-illustration">
+                        <span class="illustration-icon">🧾</span>
+                    </div>
+                    <h3>Panel de Resultados Limpio</h3>
+                    <p>Sube la foto de la factura del proveedor en el panel izquierdo o presiona el botón de ejemplo para ver el desglose en tiempo real.</p>
+                </div>
+
+                <!-- Contenedor con Resultados -->
+                <div id="resultsContainer" class="results-container hidden">
+
+                    <!-- Tarjetas de Datos Capturados -->
+                    <div class="card data-summary-card">
+                        <div class="card-header-flex">
+                            <h2><span class="step-num">2</span> Datos Capturados de la Factura</h2>
+                            <span class="tag-status">✓ Verificado por Regex</span>
+                        </div>
+
+                        <div class="minimarket-metrics-grid">
+                            <div class="metric-card">
+                                <div class="metric-header">
+                                    <span class="metric-icon">🏢</span>
+                                    <span class="metric-title">NIT del Proveedor</span>
+                                </div>
+                                <div class="metric-value" id="valNIT">N/A</div>
+                            </div>
+
+                            <div class="metric-card">
+                                <div class="metric-header">
+                                    <span class="metric-icon">📅</span>
+                                    <span class="metric-title">Fecha de Emisión</span>
+                                </div>
+                                <div class="metric-value" id="valFecha">N/A</div>
+                            </div>
+
+                            <div class="metric-card">
+                                <div class="metric-header">
+                                    <span class="metric-icon">📦</span>
+                                    <span class="metric-title">Subtotal Mercancía</span>
+                                </div>
+                                <div class="metric-value" id="valSubtotal">N/A</div>
+                            </div>
+
+                            <div class="metric-card">
+                                <div class="metric-header">
+                                    <span class="metric-icon">🏷️</span>
+                                    <span class="metric-title">Impuesto / IVA</span>
+                                </div>
+                                <div class="metric-value" id="valIVA">N/A</div>
+                            </div>
+
+                            <div class="metric-card total-card">
+                                <div class="metric-header">
+                                    <span class="metric-icon">💰</span>
+                                    <span class="metric-title">TOTAL COMPRA MINIMARKET</span>
+                                </div>
+                                <div class="metric-value total-highlight" id="valTotal">N/A</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Comparativa OpenCV y Texto Bruto -->
+                    <div class="card visual-analysis-card">
+                        <div class="tab-header">
+                            <button class="tab-btn active" data-tab="tabImages">🖼️ Filtro OpenCV (Contraste Perfecto)</button>
+                            <button class="tab-btn" data-tab="tabText">📝 Texto Leído por OCR</button>
+                        </div>
+
+                        <div class="tab-content" id="tabImages">
+                            <div class="images-grid">
+                                <div class="img-preview-box">
+                                    <div class="img-badge">Fotografía Original</div>
+                                    <img id="imgOriginal" src="" alt="Factura Original">
+                                </div>
+                                <div class="img-preview-box otsu-box">
+                                    <div class="img-badge otsu-badge">✨ Limpiada con OpenCV (Otsu)</div>
+                                    <img id="imgProcesada" src="" alt="Factura Procesada con OpenCV">
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="tab-content hidden" id="tabText">
+                            <pre id="rawTextOutput" class="code-viewer"></pre>
+                        </div>
+                    </div>
+
+                    <!-- XML Generado -->
+                    <div class="card xml-export-card">
+                        <div class="card-header-flex">
+                            <div>
+                                <h2><span class="step-num">3</span> Estructura XML Creada</h2>
+                                <p class="card-subtitle">Formato compatible con sistemas ERP y contabilidad de minimarket</p>
+                            </div>
+                            <div class="btn-actions-row">
+                                <button id="btnCopyXml" class="btn btn-secondary btn-sm">
+                                    <span>📋 Copiar XML</span>
+                                </button>
+                                <button id="btnDownloadXml" class="btn btn-success btn-sm">
+                                    <span>💾 Descargar .xml</span>
+                                </button>
+                            </div>
+                        </div>
+
+                        <div class="code-container">
+                            <pre id="xmlOutput" class="code-viewer xml-theme"></pre>
+                        </div>
+                    </div>
+
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <!-- Toast Notification -->
+    <div id="toast" class="toast hidden">
+        <span id="toastIcon">✅</span>
+        <span id="toastMsg">Mensaje de notificación</span>
+    </div>
+
+    <script src="/static/app.js"></script>
+</body>
+</html>
