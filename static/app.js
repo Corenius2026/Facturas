@@ -4,6 +4,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const fileInput = document.getElementById('fileInput');
     const filePill = document.getElementById('filePill');
     const fileNameText = document.getElementById('fileNameText');
+    const geminiApiKeyInput = document.getElementById('geminiApiKey');
 
     const btnProcess = document.getElementById('btnProcess');
     const btnSample = document.getElementById('btnSample');
@@ -11,6 +12,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const loader = document.getElementById('loader');
     const emptyState = document.getElementById('emptyState');
     const resultsContainer = document.getElementById('resultsContainer');
+    const engineBadge = document.getElementById('engineBadge');
+    const activeEngineText = document.getElementById('activeEngineText');
 
     const valNIT = document.getElementById('valNIT');
     const valFecha = document.getElementById('valFecha');
@@ -79,12 +82,16 @@ document.addEventListener('DOMContentLoaded', () => {
         reader.readAsDataURL(file);
     }
 
-    // 2. Procesar Factura de Proveedor vía API
+    // 2. Procesar Factura vía API (con soporte de clave de Google Gemini API)
     btnProcess.addEventListener('click', () => {
         if (!selectedFile) return;
 
         const formData = new FormData();
         formData.append('file', selectedFile);
+        if (geminiApiKeyInput && geminiApiKeyInput.value.trim()) {
+            formData.append('gemini_api_key', geminiApiKeyInput.value.trim());
+        }
+
         procesarFacturaAPI(formData);
     });
 
@@ -140,6 +147,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 const formData = new FormData();
                 formData.append('file', sampleFile);
+                if (geminiApiKeyInput && geminiApiKeyInput.value.trim()) {
+                    formData.append('gemini_api_key', geminiApiKeyInput.value.trim());
+                }
+
                 procesarFacturaAPI(formData);
             });
 
@@ -150,7 +161,12 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     async function procesarFacturaAPI(formData) {
-        showLoader("Aplicando OpenCV (Escala de Grises + Binarización Otsu) y Tesseract OCR...");
+        const usandoGemini = geminiApiKeyInput && geminiApiKeyInput.value.trim();
+        const msgLoader = usandoGemini ? 
+            "Analizando la factura con la API de Visión de Google Gemini AI..." : 
+            "Aplicando OpenCV y Tesseract OCR...";
+        
+        showLoader(msgLoader);
 
         try {
             const response = await fetch('/api/procesar', {
@@ -180,15 +196,15 @@ document.addEventListener('DOMContentLoaded', () => {
             xmlOutput.textContent = result.xml_content;
             currentXmlContent = result.xml_content;
 
+            // Actualizar Etiquetas de Motor
+            if (engineBadge) engineBadge.textContent = result.motor_usado || "OpenCV + OCR";
+            if (activeEngineText) activeEngineText.textContent = result.motor_usado || "OpenCV + OCR";
+
             // Mostrar Resultados
             emptyState.classList.add('hidden');
             resultsContainer.classList.remove('hidden');
 
-            if (!result.ocr_disponible) {
-                showToast("Modo simulación: Tesseract binario no instalado aún en SO", "⚠️");
-            } else {
-                showToast("Factura del Minimarket digitalizada y estructurada en XML", "🛒");
-            }
+            showToast(`Factura analizada con éxito (${result.motor_usado})`, "🤖");
 
         } catch (err) {
             if (err.name === 'TypeError' && err.message.includes('fetch')) {
