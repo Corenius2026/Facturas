@@ -26,6 +26,16 @@ function limpiarValorNumerico(strVal: string): number {
   return isNaN(num) ? 0 : num;
 }
 
+function escapeXml(unsafe: string): string {
+  if (!unsafe) return '';
+  return unsafe
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&apos;');
+}
+
 const MINIMAL_PDF_BASE64 = (
   'JVBERi0xLjQKMSAwIG9iago8PAovVHlwZSAvQ2F0YWxvZwovUGFnZXMgMiAwIFIKPj4KZW5kb2JqCjIgMCBvYmoKPDAKL1R5cGUgL1BhZ2VzCi9LaWRzIFszIDAgUl0KL0NvdW50IDEKPj4KZW5kb2JqCjMgMCBvYmoKPDAKL1R5cGUgL1BhZ2UKL1BhcmVudCAyIDAgUgovTWVkaWFCb3ggWzAgMCA2MTIgNzkyXQovQ29udGVudHMgNCAwIFIKPj4KZW5kb2JqCjQgMCBvYmoKPDAKL0xlbmd0aCA1NQo+PgpzdHJlYW0KQlQKL0YxIDEyIFRmCjEwMCA3MDAgVGQKKEZhY3R1cmEgZGUgQ29tcHJhIC0gTWluaW1hcmtldCBQT1MpIFRqCkVUCmVuZHN0cmVhbQplbmRvYmoKdHJhaWxlcgo8PAovUm9vdCAxIDAgUgoxMDAwCi9TaXplIDUKPj4KJSVFT0Y='
 );
@@ -72,6 +82,7 @@ async function generarEstructuraSiigoIdentica(datos: FacturaDatos): Promise<{
     const totalItemNum = limpiarValorNumerico(p.total_item) || (limpiarValorNumerico(p.precio_unitario) * cantNum);
     const precioUnitNum = limpiarValorNumerico(p.precio_unitario) || (totalItemNum / cantNum);
     const lineIva = Math.round(totalItemNum * 0.19 * 100) / 100;
+    const descEscaped = escapeXml(p.descripcion || 'PRODUCTO');
 
     return `    <cac:InvoiceLine>
       <cbc:ID>${index + 1}</cbc:ID>
@@ -92,7 +103,7 @@ async function generarEstructuraSiigoIdentica(datos: FacturaDatos): Promise<{
         </cac:TaxSubtotal>
       </cac:TaxTotal>
       <cac:Item>
-        <cbc:Description><![CDATA[${p.descripcion || 'PRODUCTO'}]]></cbc:Description>
+        <cbc:Description>${descEscaped}</cbc:Description>
         <cac:StandardItemIdentification>
           <cbc:ID schemeID="999">${index + 101}</cbc:ID>
         </cac:StandardItemIdentification>
@@ -103,6 +114,8 @@ async function generarEstructuraSiigoIdentica(datos: FacturaDatos): Promise<{
       </cac:Price>
     </cac:InvoiceLine>`;
   }).join('\n');
+
+  const provNameEscaped = escapeXml(`PROVEEDOR ${nitProvRaw}`);
 
   const invoiceXml = `<?xml version="1.0" encoding="UTF-8"?>
 <Invoice xmlns:cac="urn:oasis:names:specification:ubl:schema:xsd:CommonAggregateComponents-2"
@@ -126,10 +139,10 @@ async function generarEstructuraSiigoIdentica(datos: FacturaDatos): Promise<{
     <cbc:AdditionalAccountID schemeAgencyID="195">1</cbc:AdditionalAccountID>
     <cac:Party>
       <cac:PartyName>
-        <cbc:Name><![CDATA[PROVEEDOR ${nitProvRaw}]]></cbc:Name>
+        <cbc:Name>${provNameEscaped}</cbc:Name>
       </cac:PartyName>
       <cac:PartyTaxScheme>
-        <cbc:RegistrationName><![CDATA[PROVEEDOR ${nitProvRaw}]]></cbc:RegistrationName>
+        <cbc:RegistrationName>${provNameEscaped}</cbc:RegistrationName>
         <cbc:CompanyID schemeAgencyID="195" schemeAgencyName="CO, DIAN (Dirección de Impuestos y Aduanas Nacionales)" schemeName="31" schemeID="7">${nitProvRaw}</cbc:CompanyID>
         <cbc:TaxLevelCode>R-99-PN</cbc:TaxLevelCode>
         <cac:TaxScheme>
@@ -138,7 +151,7 @@ async function generarEstructuraSiigoIdentica(datos: FacturaDatos): Promise<{
         </cac:TaxScheme>
       </cac:PartyTaxScheme>
       <cac:PartyLegalEntity>
-        <cbc:RegistrationName><![CDATA[PROVEEDOR ${nitProvRaw}]]></cbc:RegistrationName>
+        <cbc:RegistrationName>${provNameEscaped}</cbc:RegistrationName>
         <cbc:CompanyID schemeAgencyID="195" schemeAgencyName="CO, DIAN (Dirección de Impuestos y Aduanas Nacionales)" schemeName="31" schemeID="7">${nitProvRaw}</cbc:CompanyID>
       </cac:PartyLegalEntity>
     </cac:Party>
@@ -208,7 +221,7 @@ ${productosXmlLines}
   <cbc:IssueTime>12:00:00-05:00</cbc:IssueTime>
   <cac:SenderParty>
     <cac:PartyTaxScheme>
-      <cbc:RegistrationName><![CDATA[PROVEEDOR ${nitProvRaw}]]></cbc:RegistrationName>
+      <cbc:RegistrationName>${provNameEscaped}</cbc:RegistrationName>
       <cbc:CompanyID schemeAgencyID="195" schemeAgencyName="CO, DIAN (Dirección de Impuestos y Aduanas Nacionales)" schemeName="31" schemeID="7">${nitProvRaw}</cbc:CompanyID>
       <cbc:TaxLevelCode>R-99-PN</cbc:TaxLevelCode>
       <cac:TaxScheme>
