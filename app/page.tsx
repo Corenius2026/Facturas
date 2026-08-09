@@ -197,24 +197,43 @@ export default function MinimarketPOSPage() {
       const targetXmlInside = xmlFilenameInside || `ad${key27}.xml`;
       const targetPdfInside = pdfFilenameInside || `fv${key27}.pdf`;
 
-      const MINIMAL_PDF_BASE64 = (
-        'JVBERi0xLjQKJcFSWzENCjEgMCBvYmo8PC9UeXBlL0NhdGFsb2cvUGFnZXMgMiAwIFI+PmVuZG9iagoy' +
-        'IDAwYmo8PC9UeXBlL1BhZ2VzL0NvdW50IDEvS2lkc1szIDAgUl0+PmVuZG9iagozIDAgb2JqPDwvVHlw' +
-        'ZS9QYWdlL01lZGlhQm94WzAgMCA2MTIgNzkyXS9SZXNvdXJjZXM8PC9Gb250PDwvRjEgNCAwIFI+Pj4+' +
-        '/Q29udGVudHMgNSAwIFIvUGFyZW50IDIgMCBSPj5lbmRvYmoKNCAwIG9iajw8L1R5cGUvRm9udC9T' +
-        'dWJ0eXBlL1R5cGUxL0Jhc2VGb250L0hlbHZldGljYT4+ZW5kb2JqCjUgMCBvYmo8PC9MZW5ndGggNzg+' +
-        'PnN0cmVhbQpCVAovRjEgMTIgVGYKNzAgNzEwIFRkCihGYWN0dXJhIGRlIENvbXByYSAtIE1pbmltYXJr' +
-        'ZXQgUE9TKSBUagpFVAplbmRzdHJlYW0KZW5kb2JqCnhyZWYKMCA2CjAwMDAwMDAwMDAgNjU1MzUgZiAN' +
-        'CjAwMDAwMDAwMDkgMDAwMDAgbiANCjAwMDAwMDAwNTggMDAwMDAgbiANCjAwMDAwMDAxMTUgMDAwMDAg' +
-        'biANCjAwMDAwMDAyMjEgMDAwMDAgbiANCjAwMDAwMDAyOTIgMDAwMDAgbiANCnRyYWlsZXIKPDwvU2l6' +
-        'ZSA2L1Jvb3QgMSAwIFI+PgpzdGFydHhyZWYKNDIxCiUlRU9G'
-      );
+      let zipBlob: Blob;
 
-      const zip = new JSZip();
-      zip.file(targetXmlInside, xmlContent);
-      zip.file(targetPdfInside, Uint8Array.from(atob(MINIMAL_PDF_BASE64), c => c.charCodeAt(0)));
+      if (zipB64) {
+        const cleanB64 = zipB64.replace(/[^A-Za-z0-9+/=]/g, '');
+        const binaryStr = atob(cleanB64);
+        const len = binaryStr.length;
+        const bytes = new Uint8Array(len);
+        for (let i = 0; i < len; i++) {
+          bytes[i] = binaryStr.charCodeAt(i);
+        }
+        zipBlob = new Blob([bytes], { type: 'application/zip' });
+      } else {
+        const pdfBase64Clean = (
+          'JVBERi0xLjQKJcFSWzENCjEgMCBvYmo8PC9UeXBlL0NhdGFsb2cvUGFnZXMgMiAwIFI+PmVuZG9iagoy' +
+          'IDAwYmo8PC9UeXBlL1BhZ2VzL0NvdW50IDEvS2lkc1szIDAgUl0+PmVuZG9iagozIDAgb2JqPDwvVHlw' +
+          'ZS9QYWdlL01lZGlhQm94WzAgMCA2MTIgNzkyXS9SZXNvdXJjZXM8PC9Gb250PDwvRjEgNCAwIFI+Pj4+' +
+          '/Q29udGVudHMgNSAwIFIvUGFyZW50IDIgMCBSPj5lbmRvYmoKNCAwIG9iajw8L1R5cGUvRm9udC9T' +
+          'dWJ0eXBlL1R5cGUxL0Jhc2VGb250L0hlbHZldGljYT4+ZW5kb2JqCjUgMCBvYmo8PC9MZW5ndGggNzg+' +
+          'PnN0cmVhbQpCVAovRjEgMTIgVGYKNzAgNzEwIFRkCihGYWN0dXJhIGRlIENvbXByYSAtIE1pbmltYXJr' +
+          'ZXQgUE9TKSBUagpFVAplbmRzdHJlYW0KZW5kb2JqCnhyZWYKMCA2CjAwMDAwMDAwMDAgNjU1MzUgZiAN' +
+          'CjAwMDAwMDAwMDkgMDAwMDAgbiANCjAwMDAwMDAwNTggMDAwMDAgbiANCjAwMDAwMDAxMTUgMDAwMDAg' +
+          'biANCjAwMDAwMDAyMjEgMDAwMDAgbiANCjAwMDAwMDAyOTIgMDAwMDAgbiANCnRyYWlsZXIKPDwvU2l6' +
+          'ZSA2L1Jvb3QgMSAwIFI+PgpzdGFydHhyZWYKNDIxCiUlRU9G'
+        ).replace(/[^A-Za-z0-9+/=]/g, '');
 
-      const zipBlob = await zip.generateAsync({ type: 'blob' });
+        const pdfBinary = atob(pdfBase64Clean);
+        const pdfBytes = new Uint8Array(pdfBinary.length);
+        for (let i = 0; i < pdfBinary.length; i++) {
+          pdfBytes[i] = pdfBinary.charCodeAt(i);
+        }
+
+        const zip = new JSZip();
+        zip.file(targetXmlInside, xmlContent);
+        zip.file(targetPdfInside, pdfBytes);
+        zipBlob = await zip.generateAsync({ type: 'blob' });
+      }
+
       const url = URL.createObjectURL(zipBlob);
       const a = document.createElement('a');
       a.href = url;
@@ -226,7 +245,7 @@ export default function MinimarketPOSPage() {
       showToast(`¡Paquete ${targetZipFilename} descargado con éxito!`, 'success');
     } catch (err: any) {
       console.error('Error al empaquetar ZIP:', err);
-      showToast('Error al generar el archivo .ZIP', 'error');
+      showToast(err?.message || 'Error al generar el archivo .ZIP', 'error');
     }
   };
 
