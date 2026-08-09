@@ -2,25 +2,28 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import {
+  Building2,
   UploadCloud,
   FileText,
   Calendar,
+  Package,
+  Tag,
   DollarSign,
+  Copy,
   Download,
   RefreshCw,
   AlertTriangle,
   CheckCircle2,
   ListOrdered,
+  FileCheck2,
   Store,
   Sparkles,
   Layers,
   Trash2,
   CheckSquare,
   Square,
-  Camera,
-  TrendingUp,
-  Receipt,
-  Package
+  FileSpreadsheet,
+  FileArchive
 } from 'lucide-react';
 
 interface ProductoItem {
@@ -54,10 +57,13 @@ export default function MinimarketPOSPage() {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string>('');
   const [isProcessing, setIsProcessing] = useState<boolean>(false);
+  const [activeTab, setActiveTab] = useState<'image' | 'text'>('image');
 
   const [fields, setFields] = useState<InvoiceFields | null>(null);
   const [productos, setProductos] = useState<ProductoItem[]>([]);
+  const [rawText, setRawText] = useState<string>('');
   const [xmlContent, setXmlContent] = useState<string>('');
+  const [zipB64, setZipB64] = useState<string>('');
 
   const [history, setHistory] = useState<SupabaseInvoice[]>([]);
   const [selectedInvoiceIds, setSelectedInvoiceIds] = useState<string[]>([]);
@@ -97,7 +103,6 @@ export default function MinimarketPOSPage() {
     setSelectedFile(file);
     const url = URL.createObjectURL(file);
     setPreviewUrl(url);
-    // Auto procesar al seleccionar
     processInvoice(file);
   };
 
@@ -130,15 +135,23 @@ export default function MinimarketPOSPage() {
 
       setFields(result.fields);
       setProductos(result.productos || result.fields?.Productos || []);
+      setRawText(result.raw_text);
       setXmlContent(result.xml_content);
+      setZipB64(result.zip_b64 || '');
 
-      showToast('¡Factura guardada con éxito!', 'success');
+      showToast('¡Factura analizada e integrada exitosamente!', 'success');
       loadHistory();
     } catch (err: any) {
-      showToast(err.message || 'Error analizando la factura', 'error');
+      showToast(err.message || 'Error en el procesamiento de la factura', 'error');
     } finally {
       setIsProcessing(false);
     }
+  };
+
+  const copyXmlToClipboard = () => {
+    if (!xmlContent) return;
+    navigator.clipboard.writeText(xmlContent);
+    showToast('XML UBL 2.1 copiado al portapapeles', 'success');
   };
 
   const downloadXmlFile = (xmlStr?: string, filename?: string) => {
@@ -148,12 +161,63 @@ export default function MinimarketPOSPage() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = filename || (selectedFile ? selectedFile.name.replace(/\.[^/.]+$/, '') + '.xml' : 'factura_siigo.xml');
+    a.download = filename || (selectedFile ? selectedFile.name.replace(/\.[^/.]+$/, '') + '_ubl21.xml' : 'factura_dian.xml');
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
-    showToast('Documento contable descargado', 'success');
+    showToast('Archivo XML UBL 2.1 descargado', 'success');
+  };
+
+  const downloadSiigoZipFile = () => {
+    if (!zipB64) {
+      showToast('Generando paquete ZIP...', 'warning');
+      return;
+    }
+    const byteCharacters = atob(zipB64);
+    const byteNumbers = new Array(byteCharacters.length);
+    for (let i = 0; i < byteCharacters.length; i++) {
+      byteNumbers[i] = byteCharacters.charCodeAt(i);
+    }
+    const byteArray = new Uint8Array(byteNumbers);
+    const blob = new Blob([byteArray], { type: 'application/zip' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `factura_compra_siigo_${fields?.NIT || 'prov'}.zip`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    showToast('Paquete .ZIP para Siigo descargado exitosamente', 'success');
+  };
+
+  const downloadSiigoCsvFile = () => {
+    if (!fields) return;
+    const headers = ["NIT Proveedor", "Fecha Emision", "Subtotal", "IVA", "Total Factura", "Cantidad", "Descripcion Producto", "Precio Unitario", "Total Producto"];
+    const rows = (productos.length > 0 ? productos : [{ cantidad: "1", descripcion: "Mercancia General", precio_unitario: fields.Subtotal, total_item: fields.Subtotal }]).map(p => [
+      `"${fields.NIT}"`,
+      `"${fields.Fecha}"`,
+      `"${fields.Subtotal}"`,
+      `"${fields.IVA}"`,
+      `"${fields.Total}"`,
+      `"${p.cantidad}"`,
+      `"${p.descripcion.replace(/"/g, '""')}"`,
+      `"${p.precio_unitario}"`,
+      `"${p.total_item}"`
+    ]);
+
+    const csvContent = "\uFEFF" + [headers.join(","), ...rows.map(r => r.join(","))].join("\n");
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `plantilla_compras_siigo_${fields.NIT}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    showToast('Plantilla CSV para Siigo descargada', 'success');
   };
 
   // Multi-select handlers
@@ -175,7 +239,7 @@ export default function MinimarketPOSPage() {
     const idsToDelete = targetIds || selectedInvoiceIds;
     if (idsToDelete.length === 0) return;
 
-    if (!confirm(`¿Borrar ${idsToDelete.length} factura(s)?`)) {
+    if (!confirm(`¿Estás seguro de que deseas eliminar ${idsToDelete.length} factura(s)?`)) {
       return;
     }
 
@@ -192,7 +256,7 @@ export default function MinimarketPOSPage() {
         throw new Error(result.message || 'Error al eliminar registros.');
       }
 
-      showToast(result.message || 'Facturas eliminadas.', 'success');
+      showToast(result.message || 'Registros eliminados con éxito.', 'success');
       setSelectedInvoiceIds(prev => prev.filter(id => !idsToDelete.includes(id)));
       loadHistory();
     } catch (err: any) {
@@ -202,21 +266,14 @@ export default function MinimarketPOSPage() {
     }
   };
 
-  // Dashboard calculations
-  const totalFacturas = history.length;
-  const totalGastado = history.reduce((sum, item) => {
-    const val = parseFloat(item.total.replace(/[^0-9.-]+/g,""));
-    return sum + (isNaN(val) ? 0 : val);
-  }, 0);
-
   return (
-    <div className="space-y-6 pb-20">
+    <div className="space-y-6">
       {/* Toast Notification */}
       {toast && (
-        <div className={`fixed bottom-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-3 px-5 py-3 rounded-2xl border shadow-2xl backdrop-blur-md text-sm font-semibold transition-all ${
-          toast.type === 'error' ? 'bg-red-900/90 border-red-500 text-red-100' :
-          toast.type === 'warning' ? 'bg-amber-900/90 border-amber-500 text-amber-100' :
-          'bg-[#001D39]/95 border-[#4E8EA2] text-[#BDD8E9]'
+        <div className={`fixed bottom-6 right-6 z-50 flex items-center gap-3 px-5 py-3 rounded-xl border shadow-2xl backdrop-blur-md text-sm font-semibold transition-all ${
+          toast.type === 'error' ? 'bg-[#001D39] border-red-500 text-red-200' :
+          toast.type === 'warning' ? 'bg-[#001D39] border-amber-500 text-amber-200' :
+          'bg-[#001D39] border-[#4E8EA2] text-[#BDD8E9]'
         }`}>
           {toast.type === 'error' && <AlertTriangle className="w-5 h-5 text-red-400" />}
           {toast.type === 'warning' && <AlertTriangle className="w-5 h-5 text-amber-400" />}
@@ -225,245 +282,358 @@ export default function MinimarketPOSPage() {
         </div>
       )}
 
-      {/* Header Banner */}
-      <header className="bg-[#001D39] rounded-3xl p-5 sm:p-8 text-white shadow-xl flex flex-col sm:flex-row items-center sm:justify-between gap-4 text-center sm:text-left">
-        <div className="flex flex-col sm:flex-row items-center gap-4">
-          <div className="w-16 h-16 bg-[#0A4174] border border-[#49769F]/50 rounded-2xl flex items-center justify-center shadow-inner">
+      {/* Clean Premium Header Banner */}
+      <header className="bg-gradient-to-r from-[#001D39] via-[#0A4174] to-[#001D39] rounded-2xl p-6 sm:p-8 text-white shadow-xl border border-[#49769F]/30 flex items-center justify-between">
+        <div className="flex items-center gap-5">
+          <div className="w-16 h-16 bg-white/10 backdrop-blur-md border border-white/20 rounded-2xl flex items-center justify-center shadow-inner">
             <Store className="w-8 h-8 text-[#7BBDE8]" />
           </div>
           <div>
-            <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight">
-              Mi Negocio<span className="text-[#7BBDE8]">.POS</span>
+            <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-white">
+              Minimarket<span className="text-[#7BBDE8]"> POS</span>
             </h1>
-            <p className="text-[#BDD8E9] text-sm mt-1 opacity-90">Gestión de compras e inventario</p>
+            <p className="text-[#BDD8E9] text-xs sm:text-sm mt-1 font-medium">Digitalizador de Facturas de Proveedores e Importación a Siigo</p>
           </div>
         </div>
       </header>
 
-      {/* Dashboard Summary */}
-      <div className="grid grid-cols-2 gap-4">
-        <div className="bg-white rounded-3xl p-5 border border-[#BDD8E9] shadow-sm flex items-center gap-4">
-          <div className="w-12 h-12 bg-blue-50 rounded-2xl flex items-center justify-center text-blue-600">
-            <Receipt className="w-6 h-6" />
-          </div>
-          <div>
-            <p className="text-xs font-bold text-slate-500 uppercase">Facturas</p>
-            <p className="text-xl font-black text-[#001D39]">{totalFacturas}</p>
-          </div>
-        </div>
-        <div className="bg-white rounded-3xl p-5 border border-[#BDD8E9] shadow-sm flex items-center gap-4">
-          <div className="w-12 h-12 bg-green-50 rounded-2xl flex items-center justify-center text-green-600">
-            <TrendingUp className="w-6 h-6" />
-          </div>
-          <div>
-            <p className="text-xs font-bold text-slate-500 uppercase">Total Compras</p>
-            <p className="text-xl font-black text-[#001D39]">${totalGastado.toLocaleString('es-CO')}</p>
-          </div>
-        </div>
-      </div>
-
       {/* Main Grid */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Upload/Camera Zone */}
-        <section className="bg-white border border-[#BDD8E9] rounded-3xl p-6 shadow-md flex flex-col justify-center">
-          <div
-            onDragOver={(e) => e.preventDefault()}
-            onDrop={handleDrop}
-            onClick={() => fileInputRef.current?.click()}
-            className="border-2 border-dashed border-[#7BBDE8] bg-[#EAF2F8]/50 hover:bg-[#EAF2F8] active:bg-[#BDD8E9]/50 transition-all rounded-3xl p-10 text-center cursor-pointer relative group flex flex-col items-center justify-center min-h-[250px]"
-          >
-            <input
-              type="file"
-              ref={fileInputRef}
-              accept="image/*"
-              capture="environment"
-              className="hidden"
-              onChange={(e) => e.target.files?.[0] && handleFileSelect(e.target.files[0])}
-            />
-            
-            {isProcessing ? (
-              <div className="flex flex-col items-center">
-                <div className="relative w-20 h-20 mb-4">
-                  <div className="absolute inset-0 border-4 border-[#BDD8E9] rounded-2xl"></div>
-                  <div className="absolute left-0 right-0 h-1 bg-[#0A4174] shadow-[0_0_10px_#0A4174] animate-scan rounded-full"></div>
-                </div>
-                <h3 className="font-bold text-[#001D39] text-lg">Leyendo Factura...</h3>
-                <p className="text-sm text-[#49769F] mt-1 animate-pulse">Extrayendo productos y precios</p>
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+        {/* Left Column: Upload */}
+        <section className="lg:col-span-5 bg-white border border-[#BDD8E9] rounded-2xl p-6 shadow-md hover:shadow-lg transition-all space-y-6 flex flex-col justify-between">
+          <div className="space-y-4">
+            <div className="flex items-center justify-between border-b border-[#EAF2F8] pb-3">
+              <h2 className="text-base font-bold text-[#001D39] flex items-center gap-2">
+                <FileCheck2 className="w-5 h-5 text-[#0A4174]" />
+                Factura de Proveedor
+              </h2>
+            </div>
+
+            <div
+              onDragOver={(e) => e.preventDefault()}
+              onDrop={handleDrop}
+              onClick={() => fileInputRef.current?.click()}
+              className="border-2 border-dashed border-[#49769F]/40 hover:border-[#0A4174] bg-[#EAF2F8]/50 hover:bg-[#EAF2F8] transition-all rounded-2xl p-8 text-center cursor-pointer relative group"
+            >
+              <input
+                type="file"
+                ref={fileInputRef}
+                accept="image/*"
+                className="hidden"
+                onChange={(e) => e.target.files?.[0] && handleFileSelect(e.target.files[0])}
+              />
+              <div className="w-14 h-14 bg-white border border-[#BDD8E9] rounded-full flex items-center justify-center mx-auto mb-3 text-[#0A4174] shadow-sm group-hover:scale-110 transition-transform">
+                <UploadCloud className="w-7 h-7 text-[#0A4174]" />
               </div>
-            ) : (
-              <>
-                <div className="w-20 h-20 bg-[#001D39] rounded-full flex items-center justify-center mx-auto mb-4 text-white shadow-lg group-hover:scale-105 transition-transform">
-                  <Camera className="w-10 h-10" />
+              <h3 className="font-bold text-sm text-[#001D39]">Arrastra la imagen de la factura</h3>
+              <p className="text-xs text-[#49769F] mt-1">o <span className="text-[#0A4174] font-bold underline">explora tus archivos</span> (.jpg, .png)</p>
+              
+              {selectedFile && (
+                <div className="mt-4 inline-flex items-center gap-2 bg-[#001D39] text-[#7BBDE8] px-3.5 py-1.5 rounded-xl text-xs font-semibold shadow">
+                  <FileText className="w-4 h-4" />
+                  <span>{selectedFile.name}</span>
                 </div>
-                <h3 className="font-black text-xl text-[#001D39]">Tomar Foto</h3>
-                <p className="text-sm text-[#49769F] mt-2 font-medium">Toca aquí para escanear una factura física o subir una imagen.</p>
-              </>
-            )}
+              )}
+            </div>
+          </div>
+
+          <div className="pt-2">
+            <button
+              onClick={() => processInvoice()}
+              disabled={!selectedFile || isProcessing}
+              className="w-full bg-[#001D39] hover:bg-[#0A4174] disabled:opacity-40 disabled:cursor-not-allowed text-white font-bold py-3.5 px-4 rounded-xl shadow-md hover:shadow-lg transition-all flex items-center justify-center gap-2 text-sm"
+            >
+              <Sparkles className="w-4 h-4 text-[#7BBDE8]" />
+              <span>{isProcessing ? 'Procesando Documento...' : 'Procesar Factura para Siigo'}</span>
+            </button>
           </div>
         </section>
 
-        {/* Results / Extracted Data */}
-        <section className="bg-white border border-[#BDD8E9] rounded-3xl p-6 shadow-md">
+        {/* Right Column: Extracted Results */}
+        <section className="lg:col-span-7 space-y-6 relative">
+          {/* Loader Overlay */}
+          {isProcessing && (
+            <div className="absolute inset-0 bg-[#001D39]/85 backdrop-blur-sm border border-[#49769F] rounded-2xl z-40 flex flex-col items-center justify-center gap-4 text-white shadow-2xl">
+              <div className="w-14 h-14 border-4 border-[#BDD8E9]/30 border-t-[#7BBDE8] rounded-full animate-spin flex items-center justify-center">
+              </div>
+              <h3 className="font-bold text-base">Extrayendo Datos y Generando Paquete Siigo...</h3>
+              <p className="text-xs text-[#BDD8E9]">Analizando automáticamente encabezados, productos e integrando formato UBL 2.1...</p>
+            </div>
+          )}
+
           {!fields ? (
-            <div className="h-full flex flex-col items-center justify-center text-center p-8 opacity-60 min-h-[250px]">
-              <Sparkles className="w-16 h-16 text-[#6EA2B3] mb-4" />
-              <h3 className="text-xl font-bold text-[#001D39]">Sin factura activa</h3>
-              <p className="text-sm text-[#49769F] max-w-xs mt-2">Toma una foto de tu factura y la IA extraerá todos los datos mágicamente.</p>
+            <div className="bg-white border border-[#BDD8E9] rounded-2xl p-12 text-center text-[#49769F] shadow-md">
+              <FileText className="w-14 h-14 mx-auto mb-3 text-[#6EA2B3] opacity-60" />
+              <h3 className="text-lg font-bold text-[#001D39] mb-1">Sin Factura Procesada</h3>
+              <p className="text-xs max-w-md mx-auto">Carga la imagen de una factura en el panel izquierdo para generar automáticamente el paquete .ZIP y la plantilla requerida por Siigo.</p>
             </div>
           ) : (
-            <div className="space-y-6">
-              <div className="flex justify-between items-center border-b border-slate-100 pb-4">
-                <h2 className="text-lg font-black text-[#001D39] flex items-center gap-2">
-                  <CheckCircle2 className="w-6 h-6 text-green-500" />
-                  Factura Registrada
-                </h2>
-                <button
-                  onClick={() => downloadXmlFile()}
-                  className="bg-[#EAF2F8] hover:bg-[#BDD8E9] text-[#0A4174] px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2"
-                  title="Exportar para sistema contable"
-                >
-                  <Download className="w-4 h-4" />
-                  <span className="hidden sm:inline">Exportar Contabilidad</span>
-                </button>
-              </div>
-
-              {/* Total & Basic Info */}
-              <div className="bg-[#001D39] rounded-2xl p-5 text-white flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-lg">
-                <div>
-                  <p className="text-[#7BBDE8] text-xs font-bold uppercase tracking-wider mb-1">Total a Pagar</p>
-                  <p className="text-3xl font-black">${fields.Total}</p>
+            <>
+              {/* Export Buttons Bar for Siigo */}
+              <div className="bg-gradient-to-r from-[#001D39] to-[#0A4174] border border-[#49769F]/40 rounded-2xl p-4 shadow-md text-white flex flex-col sm:flex-row items-center justify-between gap-3">
+                <div className="flex items-center gap-3">
+                  <FileArchive className="w-6 h-6 text-[#7BBDE8]" />
+                  <div>
+                    <h3 className="font-bold text-sm">Archivos de Importación para Siigo</h3>
+                    <p className="text-[11px] text-[#BDD8E9]">Generado en formato DIAN UBL 2.1 y plantilla de compra</p>
+                  </div>
                 </div>
-                <div className="flex gap-4 sm:text-right text-sm">
-                  <div>
-                    <p className="text-[#49769F] font-semibold text-xs">Proveedor</p>
-                    <p className="font-bold text-[#BDD8E9]">{fields.NIT}</p>
-                  </div>
-                  <div>
-                    <p className="text-[#49769F] font-semibold text-xs">Fecha</p>
-                    <p className="font-bold text-[#BDD8E9]">{fields.Fecha}</p>
-                  </div>
+
+                <div className="flex flex-wrap gap-2 w-full sm:w-auto">
+                  <button
+                    onClick={downloadSiigoZipFile}
+                    className="flex-1 sm:flex-initial bg-[#7BBDE8] hover:bg-[#6EA2B3] text-[#001D39] font-extrabold px-3.5 py-2 rounded-xl text-xs flex items-center justify-center gap-1.5 shadow transition-all"
+                  >
+                    <FileArchive className="w-4 h-4" />
+                    <span>Descargar Paquete .ZIP (Siigo)</span>
+                  </button>
+
+                  <button
+                    onClick={downloadSiigoCsvFile}
+                    className="flex-1 sm:flex-initial bg-white/10 hover:bg-white/20 text-white font-bold px-3 py-2 rounded-xl text-xs flex items-center justify-center gap-1.5 border border-white/20 transition-all"
+                  >
+                    <FileSpreadsheet className="w-4 h-4 text-[#7BBDE8]" />
+                    <span>Plantilla CSV</span>
+                  </button>
                 </div>
               </div>
 
-              {/* Responsive Products List */}
-              <div>
-                <h3 className="text-sm font-bold text-slate-500 uppercase mb-3 flex items-center gap-2">
-                  <Package className="w-4 h-4" />
-                  {productos.length} Productos Identificados
-                </h3>
-                
-                <div className="space-y-3 max-h-64 overflow-y-auto pr-2 custom-scrollbar">
-                  {productos.length === 0 ? (
-                    <p className="text-sm text-slate-400 text-center py-4">No se detectaron productos individuales.</p>
-                  ) : (
-                    productos.map((prod, idx) => (
-                      <div key={idx} className="bg-slate-50 border border-slate-100 rounded-2xl p-4 flex justify-between items-center hover:shadow-sm transition-shadow">
-                        <div className="flex-1">
-                          <p className="font-extrabold text-[#001D39] text-sm mb-1">{prod.descripcion}</p>
-                          <div className="flex items-center gap-3 text-xs font-semibold text-slate-500">
-                            <span className="bg-white px-2 py-1 rounded-md shadow-sm border border-slate-100">Cant: {prod.cantidad || '1'}</span>
-                            <span>Unidad: ${prod.precio_unitario || '0'}</span>
-                          </div>
-                        </div>
-                        <div className="text-right ml-4">
-                          <p className="font-black text-[#0A4174] text-base">${prod.total_item || '0'}</p>
-                        </div>
-                      </div>
-                    ))
-                  )}
+              {/* Header Metrics Summary */}
+              <div className="bg-white border border-[#BDD8E9] rounded-2xl p-6 shadow-md space-y-4">
+                <div className="border-b border-[#EAF2F8] pb-3">
+                  <h2 className="text-sm font-extrabold text-[#001D39] uppercase tracking-wider flex items-center gap-2">
+                    <Layers className="w-4 h-4 text-[#0A4174]" />
+                    Encabezado de Compra
+                  </h2>
+                </div>
+
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                  <div className="bg-[#EAF2F8] border border-[#BDD8E9] rounded-xl p-3">
+                    <span className="block text-[11px] font-bold text-[#49769F] uppercase">NIT Proveedor</span>
+                    <span className="text-sm font-extrabold text-[#001D39] block mt-0.5">{fields.NIT}</span>
+                  </div>
+
+                  <div className="bg-[#EAF2F8] border border-[#BDD8E9] rounded-xl p-3">
+                    <span className="block text-[11px] font-bold text-[#49769F] uppercase">Fecha Emisión</span>
+                    <span className="text-sm font-extrabold text-[#001D39] block mt-0.5">{fields.Fecha}</span>
+                  </div>
+
+                  <div className="bg-[#EAF2F8] border border-[#BDD8E9] rounded-xl p-3">
+                    <span className="block text-[11px] font-bold text-[#49769F] uppercase">Subtotal</span>
+                    <span className="text-sm font-extrabold text-[#001D39] block mt-0.5">${fields.Subtotal}</span>
+                  </div>
+
+                  <div className="bg-[#EAF2F8] border border-[#BDD8E9] rounded-xl p-3">
+                    <span className="block text-[11px] font-bold text-[#49769F] uppercase">Impuesto IVA</span>
+                    <span className="text-sm font-extrabold text-[#001D39] block mt-0.5">${fields.IVA}</span>
+                  </div>
+
+                  <div className="col-span-2 sm:col-span-4 bg-[#001D39] rounded-xl p-4 text-white flex justify-between items-center shadow">
+                    <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-[#BDD8E9]">
+                      <DollarSign className="w-5 h-5 text-[#7BBDE8]" />
+                      <span>TOTAL FACTURA PROVEEDOR</span>
+                    </div>
+                    <span className="text-2xl font-black text-[#7BBDE8]">${fields.Total}</span>
+                  </div>
                 </div>
               </div>
-            </div>
+
+              {/* Itemized Products Table */}
+              <div className="bg-white border border-[#BDD8E9] rounded-2xl p-6 shadow-md space-y-4">
+                <div className="flex justify-between items-center border-b border-[#EAF2F8] pb-3">
+                  <h2 className="text-sm font-extrabold text-[#001D39] flex items-center gap-2 uppercase tracking-wider">
+                    <ListOrdered className="w-4 h-4 text-[#0A4174]" />
+                    Detalle de Productos para Siigo
+                  </h2>
+                  <span className="bg-[#001D39] text-[#7BBDE8] text-xs font-bold px-3 py-1 rounded-full">
+                    {productos.length} Ítems
+                  </span>
+                </div>
+
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-xs border-collapse">
+                    <thead>
+                      <tr className="bg-[#001D39] text-[#BDD8E9] uppercase font-bold text-[11px]">
+                        <th className="p-3 rounded-l-lg">Cant</th>
+                        <th className="p-3">Descripción del Producto</th>
+                        <th className="p-3">Precio Unitario</th>
+                        <th className="p-3 text-right rounded-r-lg">Valor Total</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-[#BDD8E9]/50">
+                      {productos.length === 0 ? (
+                        <tr>
+                          <td colSpan={4} className="p-4 text-center text-[#49769F]">
+                            No se detectó tabla detallada de productos.
+                          </td>
+                        </tr>
+                      ) : (
+                        productos.map((prod, idx) => (
+                          <tr key={idx} className="hover:bg-[#EAF2F8]/60 transition-colors">
+                            <td className="p-3 font-extrabold text-[#0A4174]">{prod.cantidad || '1'}</td>
+                            <td className="p-3 font-bold text-[#001D39]">{prod.descripcion}</td>
+                            <td className="p-3 text-[#49769F] font-semibold">${prod.precio_unitario || '0'}</td>
+                            <td className="p-3 text-right font-black text-[#0A4174]">${prod.total_item || '0'}</td>
+                          </tr>
+                        ))
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              {/* XML Editor Block */}
+              <div className="bg-white border border-[#BDD8E9] rounded-2xl p-6 shadow-md space-y-4">
+                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 border-b border-[#EAF2F8] pb-3">
+                  <div>
+                    <h2 className="text-sm font-extrabold text-[#001D39] uppercase tracking-wider">
+                      Estructura XML DIAN UBL 2.1
+                    </h2>
+                  </div>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={copyXmlToClipboard}
+                      className="bg-[#EAF2F8] hover:bg-[#BDD8E9] border border-[#BDD8E9] text-[#001D39] font-bold px-3 py-1.5 rounded-xl text-xs flex items-center gap-1.5 transition-all"
+                    >
+                      <Copy className="w-3.5 h-3.5" />
+                      <span>Copiar XML</span>
+                    </button>
+                    <button
+                      onClick={() => downloadXmlFile()}
+                      className="bg-[#001D39] hover:bg-[#0A4174] text-white font-bold px-3.5 py-1.5 rounded-xl text-xs flex items-center gap-1.5 transition-all shadow"
+                    >
+                      <Download className="w-3.5 h-3.5 text-[#7BBDE8]" />
+                      <span>Descargar XML</span>
+                    </button>
+                  </div>
+                </div>
+
+                <pre className="bg-[#001D39] border border-[#BDD8E9] rounded-xl p-4 font-mono text-xs text-[#7BBDE8] max-h-60 overflow-y-auto leading-relaxed">
+                  {xmlContent}
+                </pre>
+              </div>
+            </>
           )}
         </section>
       </div>
 
-      {/* History Section */}
-      <section className="bg-white border border-[#BDD8E9] rounded-3xl p-6 shadow-md space-y-4">
-        <div className="flex justify-between items-center border-b border-[#EAF2F8] pb-4">
+      {/* History Section with Multi-select and Delete */}
+      <section className="bg-white border border-[#BDD8E9] rounded-2xl p-6 shadow-md space-y-4">
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 border-b border-[#EAF2F8] pb-3">
           <div>
-            <h2 className="text-xl font-black text-[#001D39]">
-              Historial
+            <h2 className="text-base font-extrabold text-[#001D39]">
+              Historial de Compras
             </h2>
+            <p className="text-xs text-[#49769F]">Registro de facturas procesadas y guardadas</p>
           </div>
           
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center gap-2">
             {selectedInvoiceIds.length > 0 && (
               <button
                 onClick={() => handleDeleteSelected()}
                 disabled={isDeleting}
-                className="bg-red-50 hover:bg-red-100 text-red-600 font-bold px-4 py-2 rounded-xl text-xs flex items-center gap-2 transition-all"
+                className="bg-red-600 hover:bg-red-700 text-white font-bold px-3.5 py-1.5 rounded-xl text-xs flex items-center gap-1.5 transition-all shadow"
               >
-                <Trash2 className="w-4 h-4" />
-                <span className="hidden sm:inline">Eliminar ({selectedInvoiceIds.length})</span>
+                <Trash2 className="w-3.5 h-3.5" />
+                <span>Eliminar Seleccionados ({selectedInvoiceIds.length})</span>
               </button>
             )}
 
             <button
               onClick={loadHistory}
-              className="bg-slate-50 hover:bg-slate-100 text-[#001D39] font-bold p-2 rounded-xl transition-all"
-              title="Actualizar"
+              className="bg-[#EAF2F8] hover:bg-[#BDD8E9] border border-[#BDD8E9] text-[#001D39] font-bold px-3.5 py-1.5 rounded-xl text-xs flex items-center gap-1.5 transition-all"
             >
-              <RefreshCw className="w-5 h-5" />
+              <RefreshCw className="w-3.5 h-3.5 text-[#0A4174]" />
+              <span>Actualizar</span>
             </button>
           </div>
         </div>
 
-        {/* Responsive History List */}
-        <div className="space-y-3">
-          {history.length === 0 ? (
-            <div className="text-center text-slate-400 py-8 font-medium">
-              Aún no hay compras registradas en el historial.
-            </div>
-          ) : (
-            history.map((item) => {
-              const isSelected = selectedInvoiceIds.includes(item.id);
-              return (
-                <div 
-                  key={item.id} 
-                  className={`flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 p-4 rounded-2xl border transition-all ${
-                    isSelected ? 'bg-blue-50/50 border-blue-200' : 'bg-white border-slate-100 hover:border-[#BDD8E9]'
-                  }`}
-                >
-                  <div className="flex items-center gap-4 w-full sm:w-auto">
-                    <button
-                      onClick={() => handleToggleSelect(item.id)}
-                      className="focus:outline-none p-1"
+        <div className="overflow-x-auto">
+          <table className="w-full text-left text-xs border-collapse">
+            <thead>
+              <tr className="bg-[#001D39] text-[#BDD8E9] uppercase font-bold text-[11px]">
+                <th className="p-3 rounded-l-lg w-10 text-center">
+                  <button
+                    onClick={handleSelectAll}
+                    title="Seleccionar todo"
+                    className="focus:outline-none"
+                  >
+                    {history.length > 0 && selectedInvoiceIds.length === history.length ? (
+                      <CheckSquare className="w-4 h-4 text-[#7BBDE8]" />
+                    ) : (
+                      <Square className="w-4 h-4 text-[#BDD8E9]/60 hover:text-white" />
+                    )}
+                  </button>
+                </th>
+                <th className="p-3">Fecha</th>
+                <th className="p-3">Proveedor (NIT)</th>
+                <th className="p-3">Subtotal</th>
+                <th className="p-3">IVA</th>
+                <th className="p-3">TOTAL</th>
+                <th className="p-3 text-right rounded-r-lg">Acciones</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-[#BDD8E9]/50">
+              {history.length === 0 ? (
+                <tr>
+                  <td colSpan={7} className="p-6 text-center text-[#49769F]">
+                    Aún no hay compras registradas.
+                  </td>
+                </tr>
+              ) : (
+                history.map((item) => {
+                  const isSelected = selectedInvoiceIds.includes(item.id);
+                  return (
+                    <tr
+                      key={item.id}
+                      className={`transition-colors ${
+                        isSelected ? 'bg-[#EAF2F8]' : 'hover:bg-[#EAF2F8]/60'
+                      }`}
                     >
-                      {isSelected ? (
-                        <CheckSquare className="w-6 h-6 text-[#0A4174]" />
-                      ) : (
-                        <Square className="w-6 h-6 text-slate-300 hover:text-[#0A4174]" />
-                      )}
-                    </button>
-                    
-                    <div className="flex-1">
-                      <p className="font-black text-[#001D39] text-base mb-1">{item.nit}</p>
-                      <p className="text-xs font-semibold text-slate-500 flex items-center gap-1.5">
-                        <Calendar className="w-3.5 h-3.5" />
-                        {item.fecha}
-                      </p>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center justify-between sm:justify-end w-full sm:w-auto pl-10 sm:pl-0 gap-6">
-                    <div className="text-left sm:text-right">
-                      <p className="text-xs font-bold text-slate-400 uppercase">Total</p>
-                      <p className="font-black text-[#001D39] text-lg">${item.total}</p>
-                    </div>
-                    
-                    <button
-                      onClick={() => downloadXmlFile(item.xml_content, `factura_${item.nit}.xml`)}
-                      className="bg-[#EAF2F8] hover:bg-[#BDD8E9] text-[#0A4174] p-2.5 rounded-xl transition-all"
-                      title="Descargar para Contabilidad"
-                    >
-                      <Download className="w-5 h-5" />
-                    </button>
-                  </div>
-                </div>
-              );
-            })
-          )}
+                      <td className="p-3 text-center">
+                        <button
+                          onClick={() => handleToggleSelect(item.id)}
+                          className="focus:outline-none"
+                        >
+                          {isSelected ? (
+                            <CheckSquare className="w-4 h-4 text-[#0A4174]" />
+                          ) : (
+                            <Square className="w-4 h-4 text-[#49769F]/50 hover:text-[#0A4174]" />
+                          )}
+                        </button>
+                      </td>
+                      <td className="p-3 font-semibold text-[#001D39]">{item.fecha}</td>
+                      <td className="p-3 font-extrabold text-[#0A4174]">{item.nit}</td>
+                      <td className="p-3 text-[#49769F] font-semibold">${item.subtotal}</td>
+                      <td className="p-3 text-[#49769F] font-semibold">${item.iva}</td>
+                      <td className="p-3 font-black text-[#001D39]">${item.total}</td>
+                      <td className="p-3 text-right">
+                        <div className="flex items-center justify-end gap-1.5">
+                          <button
+                            onClick={() => downloadXmlFile(item.xml_content, `factura_${item.nit}.xml`)}
+                            className="bg-[#001D39] hover:bg-[#0A4174] text-white px-2.5 py-1 rounded-lg text-xs font-bold inline-flex items-center gap-1 transition-all shadow-sm"
+                            title="Descargar XML"
+                          >
+                            <Download className="w-3 h-3 text-[#7BBDE8]" />
+                            <span>XML</span>
+                          </button>
+                          
+                          <button
+                            onClick={() => handleDeleteSelected([item.id])}
+                            className="bg-red-100 hover:bg-red-200 text-red-700 p-1.5 rounded-lg transition-all"
+                            title="Eliminar factura"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })
+              )}
+            </tbody>
+          </table>
         </div>
       </section>
     </div>

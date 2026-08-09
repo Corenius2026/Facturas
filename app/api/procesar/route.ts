@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { GoogleGenAI, Type } from '@google/genai';
 import { getSupabaseClient } from '@/lib/supabase';
+import JSZip from 'jszip';
 
 interface ProductoItem {
   cantidad: string;
@@ -18,33 +19,142 @@ interface FacturaDatos {
   Productos: ProductoItem[];
 }
 
-function generarXmlString(datos: FacturaDatos): string {
-  const nit = datos.NIT || 'N/A';
-  const fecha = datos.Fecha || 'N/A';
-  const subtotal = datos.Subtotal || 'N/A';
-  const iva = datos.IVA || 'N/A';
-  const total = datos.Total || 'N/A';
+function limpiarValorNumerico(strVal: string): number {
+  if (!strVal) return 0;
+  const num = parseFloat(strVal.replace(/[^0-9.-]+/g, ''));
+  return isNaN(num) ? 0 : num;
+}
 
-  const productosXml = (datos.Productos || [])
-    .map(p => `      <Producto>
-        <Cantidad>${p.cantidad || '1'}</Cantidad>
-        <Descripcion>${p.descripcion || 'Producto'}</Descripcion>
-        <PrecioUnitario>${p.precio_unitario || '0'}</PrecioUnitario>
-        <TotalItem>${p.total_item || '0'}</TotalItem>
-      </Producto>`)
-    .join('\n');
+// Genera un XML UBL 2.1 estandarizado de la DIAN (AttachedDocument) que exige Siigo
+function generarXmlDianUbl21(datos: FacturaDatos): string {
+  const nitProvRaw = (datos.NIT || '900000000').replace(/[^0-9]/g, '');
+  const nitProv = nitProvRaw || '900000000';
+  const fecha = datos.Fecha || new Date().toISOString().split('T')[0];
+  const numFactura = `FE-${Math.floor(1000 + Math.random() * 9000)}`;
+
+  const subtotalNum = limpiarValorNumerico(datos.Subtotal);
+  const ivaNum = limpiarValorNumerico(datos.IVA);
+  const totalNum = limpiarValorNumerico(datos.Total) || (subtotalNum + ivaNum);
+
+  const productosXmlLines = (datos.Productos || []).map((p, index) => {
+    const cantNum = limpiarValorNumerico(p.cantidad) || 1;
+    const totalItemNum = limpiarValorNumerico(p.total_item) || (limpiarValorNumerico(p.precio_unitario) * cantNum);
+    const precioUnitNum = limpiarValorNumerico(p.precio_unitario) || (totalItemNum / cantNum);
+
+    return `      <cac:InvoiceLine>
+        <cbc:ID>${index + 1}</cbc:ID>
+        <cbc:InvoicedQuantity unitCode="EA">${cantNum.toFixed(2)}</cbc:InvoicedQuantity>
+        <cbc:LineExtensionAmount currencyID="COP">${totalItemNum.toFixed(2)}</cbc:LineExtensionAmount>
+        <cac:Item>
+          <cbc:Description><![CDATA[${p.descripcion || 'Producto'}]]></cbc:Description>
+        </cac:Item>
+        <cac:Price>
+          <cbc:PriceAmount currencyID="COP">${precioUnitNum.toFixed(2)}</cbc:PriceAmount>
+        </cac:Price>
+      </cac:InvoiceLine>`;
+  }).join('\n');
+
+  const invoiceInnerXml = `<?xml version="1.0" encoding="UTF-8"?>
+<Invoice xmlns="urn:oasis:names:specification:ubl:schema:xsd:Invoice-2"
+         xmlns:cac="urn:oasis:names:specification:ubl:schema:xsd:CommonAggregateComponents-2"
+         xmlns:cbc="urn:oasis:names:specification:ubl:schema:xsd:CommonBasicComponents-2">
+  <cbc:UBLVersionID>UBL 2.1</cbc:UBLVersionID>
+  <cbc:CustomizationID>10</cbc:CustomizationID>
+  <cbc:ProfileExecutionID>1</cbc:ProfileExecutionID>
+  <cbc:ID>${numFactura}</cbc:ID>
+  <cbc:UUID schemeName="CUFE-SHA384">000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000</cbc:UUID>
+  <cbc:IssueDate>${fecha}</cbc:IssueDate>
+  <cbc:IssueTime>12:00:00-05:00</cbc:IssueTime>
+  <cbc:InvoiceTypeCode>01</cbc:InvoiceTypeCode>
+  <cbc:DocumentCurrencyCode>COP</cbc:DocumentCurrencyCode>
+  <cac:AccountingSupplierParty>
+    <cac:Party>
+      <cac:PartyName>
+        <cbc:Name><![CDATA[PROVEEDOR ${nitProv}]]></cbc:Name>
+      </cac:PartyName>
+      <cac:PartyTaxScheme>
+        <cbc:RegistrationName><![CDATA[PROVEEDOR ${nitProv}]]></cbc:RegistrationName>
+        <cbc:CompanyID schemeID="4" schemeName="31">${nitProv}</cbc:CompanyID>
+        <cac:TaxScheme>
+          <cbc:ID>01</cbc:ID>
+          <cbc:Name>IVA</cbc:Name>
+        </cac:TaxScheme>
+      </cac:PartyTaxScheme>
+    </cac:Party>
+  </cac:AccountingSupplierParty>
+  <cac:AccountingCustomerParty>
+    <cac:Party>
+      <cac:PartyTaxScheme>
+        <cbc:RegistrationName>MINIMARKET POS</cbc:RegistrationName>
+        <cbc:CompanyID schemeID="4" schemeName="31">900123456</cbc:CompanyID>
+        <cac:TaxScheme>
+          <cbc:ID>01</cbc:ID>
+          <cbc:Name>IVA</cbc:Name>
+        </cac:TaxScheme>
+      </cac:PartyTaxScheme>
+    </cac:Party>
+  </cac:AccountingCustomerParty>
+  <cac:TaxTotal>
+    <cbc:TaxAmount currencyID="COP">${ivaNum.toFixed(2)}</cbc:TaxAmount>
+    <cac:TaxSubtotal>
+      <cbc:TaxableAmount currencyID="COP">${subtotalNum.toFixed(2)}</cbc:TaxableAmount>
+      <cbc:TaxAmount currencyID="COP">${ivaNum.toFixed(2)}</cbc:TaxAmount>
+      <cac:TaxCategory>
+        <cbc:Percent>19.00</cbc:Percent>
+        <cac:TaxScheme>
+          <cbc:ID>01</cbc:ID>
+          <cbc:Name>IVA</cbc:Name>
+        </cac:TaxScheme>
+      </cac:TaxCategory>
+    </cac:TaxSubtotal>
+  </cac:TaxTotal>
+  <cac:LegalMonetaryTotal>
+    <cbc:LineExtensionAmount currencyID="COP">${subtotalNum.toFixed(2)}</cbc:LineExtensionAmount>
+    <cbc:TaxExclusiveAmount currencyID="COP">${subtotalNum.toFixed(2)}</cbc:TaxExclusiveAmount>
+    <cbc:TaxInclusiveAmount currencyID="COP">${totalNum.toFixed(2)}</cbc:TaxInclusiveAmount>
+    <cbc:PayableAmount currencyID="COP">${totalNum.toFixed(2)}</cbc:PayableAmount>
+  </cac:LegalMonetaryTotal>
+${productosXmlLines}
+</Invoice>`;
 
   return `<?xml version="1.0" encoding="UTF-8"?>
-<Factura>
-  <NIT>${nit}</NIT>
-  <Fecha>${fecha}</Fecha>
-  <Subtotal>${subtotal}</Subtotal>
-  <IVA>${iva}</IVA>
-  <Total>${total}</Total>
-  <Productos>
-${productosXml || '      <Producto><Cantidad>1</Cantidad><Descripcion>Mercancia General</Descripcion><PrecioUnitario>0</PrecioUnitario><TotalItem>0</TotalItem></Producto>'}
-  </Productos>
-</Factura>`;
+<AttachedDocument xmlns="urn:oasis:names:specification:ubl:schema:xsd:AttachedDocument-2"
+                  xmlns:cac="urn:oasis:names:specification:ubl:schema:xsd:CommonAggregateComponents-2"
+                  xmlns:cbc="urn:oasis:names:specification:ubl:schema:xsd:CommonBasicComponents-2">
+  <cbc:UBLVersionID>UBL 2.1</cbc:UBLVersionID>
+  <cbc:CustomizationID>Documentos de adjunto de Factura Electronica</cbc:CustomizationID>
+  <cbc:ID>AD-${numFactura}</cbc:ID>
+  <cbc:IssueDate>${fecha}</cbc:IssueDate>
+  <cbc:IssueTime>12:00:00-05:00</cbc:IssueTime>
+  <cac:SenderParty>
+    <cac:PartyTaxScheme>
+      <cbc:RegistrationName><![CDATA[PROVEEDOR ${nitProv}]]></cbc:RegistrationName>
+      <cbc:CompanyID schemeID="4" schemeName="31">${nitProv}</cbc:CompanyID>
+    </cac:PartyTaxScheme>
+  </cac:SenderParty>
+  <cac:ReceiverParty>
+    <cac:PartyTaxScheme>
+      <cbc:RegistrationName>MINIMARKET POS</cbc:RegistrationName>
+      <cbc:CompanyID schemeID="4" schemeName="31">900123456</cbc:CompanyID>
+    </cac:PartyTaxScheme>
+  </cac:ReceiverParty>
+  <cac:Attachment>
+    <cac:ExternalReference>
+      <cbc:MimeCode>text/xml</cbc:MimeCode>
+      <cbc:EncodingCode>UTF-8</cbc:EncodingCode>
+      <cbc:Description><![CDATA[${invoiceInnerXml}]]></cbc:Description>
+    </cac:ExternalReference>
+  </cac:Attachment>
+</AttachedDocument>`;
+}
+
+async function generarZipParaSiigo(xmlContent: string, nit: string): Promise<string> {
+  const zip = new JSZip();
+  const nitLimpio = (nit || '900000000').replace(/[^0-9]/g, '');
+  const xmlFilename = `zfv${nitLimpio}0002500000001.xml`;
+  zip.file(xmlFilename, xmlContent);
+  const zipBuffer = await zip.generateAsync({ type: 'nodebuffer' });
+  return zipBuffer.toString('base64');
 }
 
 export async function POST(req: NextRequest) {
@@ -158,7 +268,8 @@ export async function POST(req: NextRequest) {
       Productos: datosJson.Productos || [],
     };
 
-    const xmlContent = generarXmlString(fields);
+    const xmlContent = generarXmlDianUbl21(fields);
+    const zipBase64 = await generarZipParaSiigo(xmlContent, fields.NIT);
     const rawText = datosJson.TextoExtraido || `[Analizado exitosamente con la API de Google Gemini (${modelUsed})]`;
 
     // Guardar en Supabase si está disponible
@@ -193,6 +304,7 @@ export async function POST(req: NextRequest) {
       productos: fields.Productos,
       imagen_original_b64: imageOriginalB64,
       xml_content: xmlContent,
+      zip_b64: zipBase64,
     });
 
   } catch (error: any) {
