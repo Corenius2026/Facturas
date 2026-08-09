@@ -346,9 +346,14 @@ export default function MinimarketPOSPage() {
             <Store className="w-8 h-8 text-[#7BBDE8]" />
           </div>
           <div>
-            <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-white">
-              Minimarket<span className="text-[#7BBDE8]"> POS</span>
-            </h1>
+            <div className="flex items-center gap-3 flex-wrap">
+              <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-white">
+                Minimarket<span className="text-[#7BBDE8]"> POS</span>
+              </h1>
+              <span className="bg-[#7BBDE8]/20 border border-[#7BBDE8]/40 text-[#7BBDE8] text-xs font-black px-3 py-1 rounded-full uppercase tracking-wider">
+                Modelo Funcional V1
+              </span>
+            </div>
             <p className="text-[#BDD8E9] text-xs sm:text-sm mt-1 font-medium">Digitalizador de Facturas de Proveedores e Importación a Siigo</p>
           </div>
         </div>
