@@ -1,9 +1,4 @@
--- ==============================================================================
--- MINIMARKET POS & INVOICE MANAGEMENT - TABLAS SUPABASE
--- ==============================================================================
-
--- 1. Tabla de Facturas de Proveedores (Historial de Compras)
-CREATE TABLE IF NOT EXISTS facturas (
+CREATE TABLE IF NOT EXISTS public.facturas (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     nit VARCHAR(50) NOT NULL DEFAULT 'N/A',
     fecha VARCHAR(50) NOT NULL DEFAULT 'N/A',
@@ -15,13 +10,19 @@ CREATE TABLE IF NOT EXISTS facturas (
     creado_en TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
--- 2. Índices para consultas ultra rápidas por NIT o Fecha
-CREATE INDEX IF NOT EXISTS idx_facturas_nit ON facturas(nit);
-CREATE INDEX IF NOT EXISTS idx_facturas_creado_en ON facturas(creado_en DESC);
+-- Índices de consulta rápida
+CREATE INDEX IF NOT EXISTS idx_facturas_nit ON public.facturas(nit);
+CREATE INDEX IF NOT EXISTS idx_facturas_creado_en ON public.facturas(creado_en DESC);
 
--- 3. Habilitar seguridad a nivel de filas (RLS - Row Level Security)
-ALTER TABLE facturas ENABLE ROW LEVEL SECURITY;
+-- Habilitar Row Level Security (RLS)
+ALTER TABLE public.facturas ENABLE ROW LEVEL SECURITY;
 
--- Política de acceso abierto para lectura e inserción con la API Key pública (Anon Key)
-CREATE POLICY "Permitir lectura publica de facturas" ON facturas FOR SELECT USING (true);
-CREATE POLICY "Permitir insercion publica de facturas" ON facturas FOR INSERT WITH CHECK (true);
+-- Políticas de lectura, inserción y eliminación pública
+DROP POLICY IF EXISTS "Permitir lectura publica de facturas" ON public.facturas;
+CREATE POLICY "Permitir lectura publica de facturas" ON public.facturas FOR SELECT USING (true);
+
+DROP POLICY IF EXISTS "Permitir insercion publica de facturas" ON public.facturas;
+CREATE POLICY "Permitir insercion publica de facturas" ON public.facturas FOR INSERT WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Permitir eliminacion publica de facturas" ON public.facturas;
+CREATE POLICY "Permitir eliminacion publica de facturas" ON public.facturas FOR DELETE USING (true);

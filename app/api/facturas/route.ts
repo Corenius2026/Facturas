@@ -8,7 +8,7 @@ export async function GET() {
       success: false,
       connected: false,
       facturas: [],
-      message: 'Supabase no está configurado aún. Agrega NEXT_PUBLIC_SUPABASE_URL y NEXT_PUBLIC_SUPABASE_ANON_KEY en Vercel.'
+      message: 'Supabase no está configurado aún.'
     });
   }
 
@@ -58,9 +58,9 @@ export async function DELETE(req: NextRequest) {
       }, { status: 400 });
     }
 
-    const { error } = await supabase
+    const { error, count } = await supabase
       .from('facturas')
-      .delete()
+      .delete({ count: 'exact' })
       .in('id', ids);
 
     if (error) {
@@ -69,10 +69,11 @@ export async function DELETE(req: NextRequest) {
 
     return NextResponse.json({
       success: true,
-      count: ids.length,
-      message: `${ids.length} registro(s) eliminado(s) correctamente.`
+      count: count || ids.length,
+      message: `${count || ids.length} registro(s) eliminado(s) correctamente.`
     });
   } catch (error: any) {
+    console.error('Error al eliminar en Supabase:', error);
     return NextResponse.json({
       success: false,
       message: error.message || 'Error al eliminar registros en Supabase.'

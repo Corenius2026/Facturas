@@ -18,12 +18,15 @@ CREATE TABLE IF NOT EXISTS public.facturas (
 CREATE INDEX IF NOT EXISTS idx_facturas_nit ON public.facturas(nit);
 CREATE INDEX IF NOT EXISTS idx_facturas_creado_en ON public.facturas(creado_en DESC);
 
--- Habilitar Row Level Security
+-- Habilitar Row Level Security (RLS)
 ALTER TABLE public.facturas ENABLE ROW LEVEL SECURITY;
 
--- Políticas de lectura e inserción
+-- Políticas de lectura, inserción y eliminación pública
 DROP POLICY IF EXISTS "Permitir lectura publica de facturas" ON public.facturas;
 CREATE POLICY "Permitir lectura publica de facturas" ON public.facturas FOR SELECT USING (true);
 
 DROP POLICY IF EXISTS "Permitir insercion publica de facturas" ON public.facturas;
 CREATE POLICY "Permitir insercion publica de facturas" ON public.facturas FOR INSERT WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Permitir eliminacion publica de facturas" ON public.facturas;
+CREATE POLICY "Permitir eliminacion publica de facturas" ON public.facturas FOR DELETE USING (true);
