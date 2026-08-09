@@ -364,19 +364,6 @@ export default function MinimarketPOSPage() {
                 </div>
               )}
             </div>
-
-            <div className="bg-[#EAF2F8]/60 border border-[#BDD8E9] rounded-xl p-3.5 space-y-1">
-              <label className="block text-[11px] font-bold text-[#001D39] uppercase">
-                Tu NIT de Empresa en Siigo (Opcional):
-              </label>
-              <input
-                type="text"
-                value={buyerNit}
-                onChange={(e) => setBuyerNit(e.target.value)}
-                placeholder="Ej. 901234567 (Para matchear con tu cuenta Siigo)"
-                className="w-full bg-white border border-[#BDD8E9] rounded-lg px-3 py-1.5 text-xs text-[#001D39] font-medium focus:outline-none focus:border-[#0A4174]"
-              />
-            </div>
           </div>
 
           <div className="pt-2">
