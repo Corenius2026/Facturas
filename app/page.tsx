@@ -283,7 +283,7 @@ export default function MinimarketPOSPage() {
       loadHistory();
     } catch (err: any) {
       showToast(err.message || 'Error al eliminar facturas', 'error');
-    } fontally {
+    } finally {
       setIsDeleting(false);
     }
   };
