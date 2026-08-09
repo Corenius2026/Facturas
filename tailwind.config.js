@@ -9,20 +9,29 @@ module.exports = {
     extend: {
       colors: {
         brand: {
-          bg: '#EAF2F8',      // Fondo casi blanco / hielo elegante
-          card: '#FFFFFF',    // Tarjetas blancas limpias
-          navy: '#001D39',    // Azul marino oscuro para textos y cabeceras
-          primary: '#0A4174', // Azul primario para botones y acentos
-          slate: '#49769F',   // Gris azulado para bordes e iconos
-          steel: '#4E8EA2',   // Azul acero secundario
-          cyan: '#6EA2B3',    // Ciano suave
-          sky: '#7BBDE8',     // Azul cielo para detalles y badges
-          ice: '#BDD8E9',     // Azul hielo claro
+          bg: '#EAF2F8',
+          card: '#FFFFFF',
+          navy: '#001D39',
+          primary: '#0A4174',
+          slate: '#49769F',
+          steel: '#4E8EA2',
+          cyan: '#6EA2B3',
+          sky: '#7BBDE8',
+          ice: '#BDD8E9',
         }
       },
       fontFamily: {
         sans: ['Plus Jakarta Sans', 'sans-serif'],
         mono: ['JetBrains Mono', 'monospace'],
+      },
+      keyframes: {
+        scan: {
+          '0%, 100%': { transform: 'translateY(0)' },
+          '50%': { transform: 'translateY(70px)' },
+        }
+      },
+      animation: {
+        scan: 'scan 2s ease-in-out infinite',
       }
     },
   },
