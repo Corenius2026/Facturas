@@ -231,7 +231,7 @@ export default function MinimarketPOSPage() {
                 Minimarket<span className="text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 to-cyan-400">POS AI</span>
               </h1>
               <span className="bg-amber-500/10 border border-amber-500/30 text-amber-400 text-xs font-bold px-2.5 py-0.5 rounded-full uppercase tracking-wider">
-                Next.js 14 + Gemini 3.5
+                Next.js 14 + Gemini 3.5 Flash
               </span>
             </div>
             <p className="text-slate-400 text-sm">Escáner Inteligente de Facturas de Proveedores para Minimarket POS</p>
@@ -254,7 +254,7 @@ export default function MinimarketPOSPage() {
             <Sparkles className="w-6 h-6" />
           </div>
           <div>
-            <span className="block text-sm font-bold">Google Gemini 3.5 AI</span>
+            <span className="block text-sm font-bold">Google Gemini 3.5 Flash</span>
             <span className="text-xs text-slate-400">Visión por IA de Alta Precisión</span>
           </div>
         </div>

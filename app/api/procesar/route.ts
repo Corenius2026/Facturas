@@ -45,11 +45,11 @@ export async function POST(req: NextRequest) {
     // Inicializar cliente Google GenAI
     const ai = new GoogleGenAI({ apiKey: apiKeyToUse });
     
-    // Modelo configurado o solicitado (gemini-3.5 prioritario)
-    const preferredModel = customModelInput?.trim() || process.env.GEMINI_MODEL || 'gemini-3.5';
+    // Modelo primario configurado: gemini-3.5-flash
+    const preferredModel = customModelInput?.trim() || process.env.GEMINI_MODEL || 'gemini-3.5-flash';
 
-    // Lista ordenada de modelos a intentar para garantizar 100% de disponibilidad
-    const modelsToTry = Array.from(new Set([preferredModel, 'gemini-3.5', 'gemini-2.0-flash', 'gemini-1.5-flash']));
+    // Lista ordenada de modelos
+    const modelsToTry = Array.from(new Set([preferredModel, 'gemini-3.5-flash', 'gemini-2.0-flash', 'gemini-1.5-flash']));
 
     const prompt = (
       "Eres un contador experto de minimarket. Analiza detalladamente esta foto de factura de compra o recibo de proveedor. " +
@@ -94,7 +94,7 @@ export async function POST(req: NextRequest) {
         modelUsed = candidateModel;
         break; // Éxito!
       } catch (err: any) {
-        console.warn(`Modelo ${candidateModel} no disponible en la API de Google, probando siguiente modelo...`, err?.message);
+        console.warn(`Modelo ${candidateModel} no disponible, probando siguiente modelo...`, err?.message);
         lastError = err;
       }
     }
