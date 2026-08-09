@@ -2,12 +2,37 @@ import { NextRequest, NextResponse } from 'next/server';
 import { GoogleGenAI, Type } from '@google/genai';
 import { getSupabaseClient } from '@/lib/supabase';
 
-function generarXmlString(datos: Record<string, string>): string {
+interface ProductoItem {
+  cantidad: string;
+  descripcion: string;
+  precio_unitario: string;
+  total_item: string;
+}
+
+interface FacturaDatos {
+  NIT: string;
+  Fecha: string;
+  Subtotal: string;
+  IVA: string;
+  Total: string;
+  Productos: ProductoItem[];
+}
+
+function generarXmlString(datos: FacturaDatos): string {
   const nit = datos.NIT || 'N/A';
   const fecha = datos.Fecha || 'N/A';
   const subtotal = datos.Subtotal || 'N/A';
   const iva = datos.IVA || 'N/A';
   const total = datos.Total || 'N/A';
+
+  const productosXml = (datos.Productos || [])
+    .map(p => `      <Producto>
+        <Cantidad>${p.cantidad || '1'}</Cantidad>
+        <Descripcion>${p.descripcion || 'Producto'}</Descripcion>
+        <PrecioUnitario>${p.precio_unitario || '0'}</PrecioUnitario>
+        <TotalItem>${p.total_item || '0'}</TotalItem>
+      </Producto>`)
+    .join('\n');
 
   return `<?xml version="1.0" encoding="UTF-8"?>
 <Factura>
@@ -16,6 +41,9 @@ function generarXmlString(datos: Record<string, string>): string {
   <Subtotal>${subtotal}</Subtotal>
   <IVA>${iva}</IVA>
   <Total>${total}</Total>
+  <Productos>
+${productosXml || '      <Producto><Cantidad>1</Cantidad><Descripcion>Mercancia General</Descripcion><PrecioUnitario>0</PrecioUnitario><TotalItem>0</TotalItem></Producto>'}
+  </Productos>
 </Factura>`;
 }
 
@@ -48,13 +76,15 @@ export async function POST(req: NextRequest) {
     // Modelo primario configurado: gemini-3.5-flash
     const preferredModel = customModelInput?.trim() || process.env.GEMINI_MODEL || 'gemini-3.5-flash';
 
-    // Lista ordenada de modelos
+    // Lista ordenada de modelos a intentar
     const modelsToTry = Array.from(new Set([preferredModel, 'gemini-3.5-flash', 'gemini-2.0-flash', 'gemini-1.5-flash']));
 
     const prompt = (
-      "Eres un contador experto de minimarket. Analiza detalladamente esta foto de factura de compra o recibo de proveedor. " +
-      "Extrae exactamente el NIT del proveedor, la Fecha de emisión de la factura, el Subtotal de la mercancía, el IVA (impuesto) y el TOTAL a pagar. " +
-      "Devuelve un formato JSON estricto con los campos: NIT, Fecha, Subtotal, IVA, Total y TextoExtraido."
+      "Eres un experto contable especializado en software Siigo y ERPs comerciales. " +
+      "Analiza detalladamente esta foto de factura de compra de minimarket. " +
+      "Extrae los datos generales (NIT del proveedor, Fecha de emisión, Subtotal, IVA, Total) Y ADEMÁS extrae la lista completa de ítems o productos detallados. " +
+      "Para cada producto en la lista, extrae: cantidad, descripcion (nombre del producto), precio_unitario y total_item. " +
+      "Devuelve un formato JSON estricto con los campos: NIT, Fecha, Subtotal, IVA, Total, TextoExtraido y un arreglo Productos."
     );
 
     let response = null;
@@ -85,8 +115,21 @@ export async function POST(req: NextRequest) {
                 IVA: { type: Type.STRING },
                 Total: { type: Type.STRING },
                 TextoExtraido: { type: Type.STRING },
+                Productos: {
+                  type: Type.ARRAY,
+                  items: {
+                    type: Type.OBJECT,
+                    properties: {
+                      cantidad: { type: Type.STRING },
+                      descripcion: { type: Type.STRING },
+                      precio_unitario: { type: Type.STRING },
+                      total_item: { type: Type.STRING },
+                    },
+                    required: ['cantidad', 'descripcion', 'total_item'],
+                  },
+                },
               },
-              required: ['NIT', 'Fecha', 'Subtotal', 'IVA', 'Total'],
+              required: ['NIT', 'Fecha', 'Subtotal', 'IVA', 'Total', 'Productos'],
             },
           },
         });
@@ -106,12 +149,13 @@ export async function POST(req: NextRequest) {
     const responseText = response.text || '{}';
     const datosJson = JSON.parse(responseText);
 
-    const fields = {
+    const fields: FacturaDatos = {
       NIT: datosJson.NIT || 'N/A',
       Fecha: datosJson.Fecha || 'N/A',
       Subtotal: datosJson.Subtotal || 'N/A',
       IVA: datosJson.IVA || 'N/A',
       Total: datosJson.Total || 'N/A',
+      Productos: datosJson.Productos || [],
     };
 
     const xmlContent = generarXmlString(fields);
@@ -146,6 +190,7 @@ export async function POST(req: NextRequest) {
       guardado_en_supabase: guardadoEnSupabase,
       raw_text: rawText,
       fields,
+      productos: fields.Productos,
       imagen_original_b64: imageOriginalB64,
       xml_content: xmlContent,
     });

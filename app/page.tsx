@@ -16,8 +16,16 @@ import {
   Download,
   RefreshCw,
   AlertTriangle,
-  CheckCircle2
+  CheckCircle2,
+  ListOrdered
 } from 'lucide-react';
+
+interface ProductoItem {
+  cantidad: string;
+  descripcion: string;
+  precio_unitario: string;
+  total_item: string;
+}
 
 interface InvoiceFields {
   NIT: string;
@@ -25,6 +33,7 @@ interface InvoiceFields {
   Subtotal: string;
   IVA: string;
   Total: string;
+  Productos?: ProductoItem[];
 }
 
 interface SupabaseInvoice {
@@ -46,6 +55,7 @@ export default function MinimarketPOSPage() {
   const [activeTab, setActiveTab] = useState<'image' | 'text'>('image');
 
   const [fields, setFields] = useState<InvoiceFields | null>(null);
+  const [productos, setProductos] = useState<ProductoItem[]>([]);
   const [rawText, setRawText] = useState<string>('');
   const [xmlContent, setXmlContent] = useState<string>('');
   const [engineUsed, setEngineUsed] = useState<string>('');
@@ -123,6 +133,7 @@ export default function MinimarketPOSPage() {
       }
 
       setFields(result.fields);
+      setProductos(result.productos || result.fields?.Productos || []);
       setRawText(result.raw_text);
       setXmlContent(result.xml_content);
       setEngineUsed(result.motor_usado);
@@ -195,12 +206,12 @@ export default function MinimarketPOSPage() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = filename || (selectedFile ? selectedFile.name.replace(/\.[^/.]+$/, '') + '.xml' : 'factura.xml');
+    a.download = filename || (selectedFile ? selectedFile.name.replace(/\.[^/.]+$/, '') + '.xml' : 'factura_siigo.xml');
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
-    showToast('Archivo XML descargado', 'success');
+    showToast('Archivo XML para Siigo descargado', 'success');
   };
 
   return (
@@ -230,11 +241,11 @@ export default function MinimarketPOSPage() {
               <h1 className="text-2xl font-extrabold tracking-tight">
                 Minimarket<span className="text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 to-cyan-400">POS AI</span>
               </h1>
-              <span className="bg-amber-500/10 border border-amber-500/30 text-amber-400 text-xs font-bold px-2.5 py-0.5 rounded-full uppercase tracking-wider">
-                Next.js 14 + Gemini 3.5 Flash
+              <span className="bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-xs font-bold px-2.5 py-0.5 rounded-full uppercase tracking-wider">
+                ✨ Compatible con Siigo ERP
               </span>
             </div>
-            <p className="text-slate-400 text-sm">Escáner Inteligente de Facturas de Proveedores para Minimarket POS</p>
+            <p className="text-slate-400 text-sm">Escáner de Facturas con Extracción Detallada de Productos para Siigo y Supabase</p>
           </div>
         </div>
 
@@ -261,11 +272,11 @@ export default function MinimarketPOSPage() {
 
         <div className="flex items-center gap-3">
           <div className="p-3 bg-slate-800 rounded-xl text-cyan-400">
-            <FileText className="w-6 h-6" />
+            <ListOrdered className="w-6 h-6" />
           </div>
           <div>
-            <span className="block text-sm font-bold">XML Automatizado</span>
-            <span className="text-xs text-slate-400">Compatible con Sistemas Contables</span>
+            <span className="block text-sm font-bold">Desglose de Productos</span>
+            <span className="text-xs text-slate-400">Extracción de ítems para Siigo</span>
           </div>
         </div>
 
@@ -289,7 +300,7 @@ export default function MinimarketPOSPage() {
               <span className="w-6 h-6 bg-emerald-500 text-slate-950 font-extrabold rounded-full flex items-center justify-center text-xs">1</span>
               Cargar Factura de Proveedor
             </h2>
-            <p className="text-xs text-slate-400 mt-1">Sube la foto del recibo de compra de alimentos, abarrotes o bebidas.</p>
+            <p className="text-xs text-slate-400 mt-1">Sube la foto del recibo de compra para extraer encabezados y productos para Siigo.</p>
           </div>
 
           <div
@@ -349,7 +360,7 @@ export default function MinimarketPOSPage() {
               className="w-full bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-400 hover:to-emerald-500 disabled:opacity-40 disabled:cursor-not-allowed text-white font-bold py-3 px-4 rounded-xl shadow-lg shadow-emerald-500/20 flex items-center justify-center gap-2 text-sm transition-all"
             >
               <Sparkles className="w-4 h-4" />
-              <span>{isProcessing ? 'Analizando con IA...' : 'Analizar con IA y Generar XML'}</span>
+              <span>{isProcessing ? 'Extrayendo Productos...' : 'Extraer Datos & Productos para Siigo'}</span>
             </button>
 
             <button
@@ -370,8 +381,8 @@ export default function MinimarketPOSPage() {
               <div className="w-16 h-16 border-4 border-emerald-500/20 border-t-emerald-500 rounded-full animate-spin-fast flex items-center justify-center">
                 <Sparkles className="w-6 h-6 text-emerald-400" />
               </div>
-              <h3 className="font-bold text-base">Analizando Factura con Google Gemini AI...</h3>
-              <p className="text-xs text-slate-400">Extrayendo NIT, Fecha, Subtotal, IVA y Total...</p>
+              <h3 className="font-bold text-base">Analizando Factura e Ítems para Siigo...</h3>
+              <p className="text-xs text-slate-400">Extrayendo NIT, Fecha, Subtotal, IVA, Total y lista de Productos...</p>
             </div>
           )}
 
@@ -379,7 +390,7 @@ export default function MinimarketPOSPage() {
             <div className="bg-[#0f172a] border border-slate-700/80 rounded-2xl p-12 text-center text-slate-400">
               <FileText className="w-16 h-16 mx-auto mb-4 opacity-40" />
               <h3 className="text-lg font-bold text-slate-200 mb-1">Panel de Resultados Limpio</h3>
-              <p className="text-xs max-w-md mx-auto">Sube la foto de la factura del proveedor en el panel izquierdo o presiona el botón de ejemplo para ver la extracción en tiempo real.</p>
+              <p className="text-xs max-w-md mx-auto">Sube la foto de la factura del proveedor para ver el desglose completo de productos formateado para Siigo.</p>
             </div>
           ) : (
             <>
@@ -388,7 +399,7 @@ export default function MinimarketPOSPage() {
                 <div className="flex justify-between items-center">
                   <h2 className="text-base font-bold flex items-center gap-2">
                     <span className="w-6 h-6 bg-emerald-500 text-slate-950 font-extrabold rounded-full flex items-center justify-center text-xs">2</span>
-                    Datos Extraídos por la IA
+                    Datos de Encabezado
                   </h2>
                   <span className="bg-emerald-500/10 border border-emerald-500/40 text-emerald-400 text-xs font-bold px-3 py-1 rounded-full">
                     {engineUsed}
@@ -438,6 +449,53 @@ export default function MinimarketPOSPage() {
                 </div>
               </div>
 
+              {/* Products Itemized Table (For Siigo) */}
+              <div className="bg-[#0f172a] border border-slate-700/80 rounded-2xl p-6 shadow-xl space-y-4">
+                <div className="flex justify-between items-center">
+                  <div>
+                    <h2 className="text-base font-bold flex items-center gap-2">
+                      <ListOrdered className="w-5 h-5 text-emerald-400" />
+                      Productos Extraídos (Desglose Siigo)
+                    </h2>
+                    <p className="text-xs text-slate-400 mt-0.5">Lista de ítems reconocidos individualmente por la IA</p>
+                  </div>
+                  <span className="bg-cyan-500/10 border border-cyan-500/40 text-cyan-400 text-xs font-bold px-3 py-1 rounded-full">
+                    {productos.length} Productos
+                  </span>
+                </div>
+
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-xs">
+                    <thead>
+                      <tr className="bg-slate-800 text-slate-400 uppercase font-bold text-[11px] border-b border-slate-700">
+                        <th className="p-2.5">Cant</th>
+                        <th className="p-2.5">Descripción del Producto</th>
+                        <th className="p-2.5">Precio Unitario</th>
+                        <th className="p-2.5 text-right">Total Ítem</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-800">
+                      {productos.length === 0 ? (
+                        <tr>
+                          <td colSpan={4} className="p-4 text-center text-slate-500">
+                            No se detectó tabla detallada de productos.
+                          </td>
+                        </tr>
+                      ) : (
+                        productos.map((prod, idx) => (
+                          <tr key={idx} className="hover:bg-slate-800/40 transition-colors">
+                            <td className="p-2.5 font-bold text-emerald-400">{prod.cantidad || '1'}</td>
+                            <td className="p-2.5 font-semibold text-slate-200">{prod.descripcion}</td>
+                            <td className="p-2.5 text-slate-300">${prod.precio_unitario || '0'}</td>
+                            <td className="p-2.5 text-right font-extrabold text-amber-400">${prod.total_item || '0'}</td>
+                          </tr>
+                        ))
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
               {/* Tabs Viewer */}
               <div className="bg-[#0f172a] border border-slate-700/80 rounded-2xl p-6 shadow-xl space-y-4">
                 <div className="flex gap-2 border-b border-slate-700 pb-3">
@@ -455,7 +513,7 @@ export default function MinimarketPOSPage() {
                       activeTab === 'text' ? 'bg-slate-800 text-emerald-400 border border-slate-700' : 'text-slate-400 hover:text-slate-200'
                     }`}
                   >
-                    📝 Respuesta / Texto Extraído
+                    📝 Respuesta de la IA
                   </button>
                 </div>
 
@@ -472,15 +530,15 @@ export default function MinimarketPOSPage() {
                 )}
               </div>
 
-              {/* XML Code Block */}
+              {/* XML Code Block (Structured for Siigo) */}
               <div className="bg-[#0f172a] border border-slate-700/80 rounded-2xl p-6 shadow-xl space-y-4">
                 <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
                   <div>
                     <h2 className="text-base font-bold flex items-center gap-2">
                       <span className="w-6 h-6 bg-emerald-500 text-slate-950 font-extrabold rounded-full flex items-center justify-center text-xs">3</span>
-                      Estructura XML Creada
+                      Estructura XML para Siigo / ERP
                     </h2>
-                    <p className="text-xs text-slate-400 mt-0.5">Formato XML estandarizado listo para descargar</p>
+                    <p className="text-xs text-slate-400 mt-0.5">Incluye etiquetas &lt;Productos&gt; e ítems detallados</p>
                   </div>
                   <div className="flex gap-2">
                     <button
@@ -495,12 +553,12 @@ export default function MinimarketPOSPage() {
                       className="bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/40 text-amber-300 font-semibold px-3 py-1.5 rounded-xl text-xs flex items-center gap-1.5 transition-all"
                     >
                       <Download className="w-3.5 h-3.5" />
-                      <span>Descargar .xml</span>
+                      <span>Descargar .xml (Siigo)</span>
                     </button>
                   </div>
                 </div>
 
-                <pre className="bg-[#090d16] border border-slate-700 rounded-xl p-4 font-mono text-xs text-emerald-400 max-h-60 overflow-y-auto leading-relaxed">
+                <pre className="bg-[#090d16] border border-slate-700 rounded-xl p-4 font-mono text-xs text-emerald-400 max-h-64 overflow-y-auto leading-relaxed">
                   {xmlContent}
                 </pre>
               </div>
@@ -516,7 +574,7 @@ export default function MinimarketPOSPage() {
             <h2 className="text-lg font-bold flex items-center gap-2">
               📜 Historial de Compras (Supabase POS)
             </h2>
-            <p className="text-xs text-slate-400">Registro centralizado de facturas almacenadas en la base de datos Supabase</p>
+            <p className="text-xs text-slate-400">Registro centralizado de facturas procesadas y almacenadas en Supabase</p>
           </div>
           <button
             onClick={loadHistory}
