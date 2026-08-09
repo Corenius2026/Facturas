@@ -66,6 +66,9 @@ export default function MinimarketPOSPage() {
   const [rawText, setRawText] = useState<string>('');
   const [xmlContent, setXmlContent] = useState<string>('');
   const [invoiceXmlContent, setInvoiceXmlContent] = useState<string>('');
+  const [zipFilename, setZipFilename] = useState<string>('');
+  const [xmlFilenameInside, setXmlFilenameInside] = useState<string>('');
+  const [pdfFilenameInside, setPdfFilenameInside] = useState<string>('');
   const [zipB64, setZipB64] = useState<string>('');
 
   const [history, setHistory] = useState<SupabaseInvoice[]>([]);
@@ -144,6 +147,9 @@ export default function MinimarketPOSPage() {
       setRawText(result.raw_text);
       setXmlContent(result.xml_content);
       setInvoiceXmlContent(result.invoice_xml_content || '');
+      setZipFilename(result.zip_filename || '');
+      setXmlFilenameInside(result.xml_filename_inside || '');
+      setPdfFilenameInside(result.pdf_filename_inside || '');
       setZipB64(result.zip_b64 || '');
 
       showToast('¡Factura analizada e integrada para Siigo!', 'success');
@@ -183,35 +189,32 @@ export default function MinimarketPOSPage() {
     }
 
     try {
-      let zipBase64ToUse = zipB64;
+      const nitProvRaw = (fields.NIT || '822007117').replace(/[^0-9]/g, '');
+      const nitProvPadded = nitProvRaw.padStart(10, '0');
+      const key27 = `08${nitProvPadded}04720260000x39efe`.substring(0, 27);
 
-      if (!zipBase64ToUse) {
-        const zip = new JSZip();
-        const nitLimpio = (fields.NIT || '900000000').replace(/[^0-9]/g, '');
-        zip.file(`zfv${nitLimpio}0002500000001.xml`, xmlContent);
-        if (invoiceXmlContent) {
-          zip.file(`Invoice_${nitLimpio}.xml`, invoiceXmlContent);
-        }
-        zipBase64ToUse = await zip.generateAsync({ type: 'base64' });
-      }
+      const targetZipFilename = zipFilename || `z${key27}.zip`;
+      const targetXmlInside = xmlFilenameInside || `ad${key27}.xml`;
+      const targetPdfInside = pdfFilenameInside || `fv${key27}.pdf`;
 
-      const byteCharacters = atob(zipBase64ToUse);
-      const byteNumbers = new Array(byteCharacters.length);
-      for (let i = 0; i < byteCharacters.length; i++) {
-        byteNumbers[i] = byteCharacters.charCodeAt(i);
-      }
-      const byteArray = new Uint8Array(byteNumbers);
-      const blob = new Blob([byteArray], { type: 'application/zip' });
-      const url = URL.createObjectURL(blob);
+      const MINIMAL_PDF_BASE64 = (
+        'JVBERi0xLjQKMSAwIG9iago8PAovVHlwZSAvQ2F0YWxvZwovUGFnZXMgMiAwIFIKPj4KZW5kb2JqCjIgMCBvYmoKPDAKL1R5cGUgL1BhZ2VzCi9LaWRzIFszIDAgUl0KL0NvdW50IDEKPj4KZW5kb2JqCjMgMCBvYmoKPDAKL1R5cGUgL1BhZ2UKL1BhcmVudCAyIDAgUgovTWVkaWFCb3ggWzAgMCA2MTIgNzkyXQovQ29udGVudHMgNCAwIFIKPj4KZW5kb2JqCjQgMCBvYmoKPDAKL0xlbmd0aCA1NQo+PgpzdHJlYW0KQlQKL0YxIDEyIFRmCjEwMCA3MDAgVGQKKEZhY3R1cmEgZGUgQ29tcHJhIC0gTWluaW1hcmtldCBQT1MpIFRqCkVUCmVuZHN0cmVhbQplbmRvYmoKdHJhaWxlcgo8PAovUm9vdCAxIDAgUgoxMDAwCi9TaXplIDUKPj4KJSVFT0Y='
+      );
+
+      const zip = new JSZip();
+      zip.file(targetXmlInside, xmlContent);
+      zip.file(targetPdfInside, Uint8Array.from(atob(MINIMAL_PDF_BASE64), c => c.charCodeAt(0)));
+
+      const zipBlob = await zip.generateAsync({ type: 'blob' });
+      const url = URL.createObjectURL(zipBlob);
       const a = document.createElement('a');
       a.href = url;
-      const nitFilename = (fields.NIT || 'proveedor').replace(/[^0-9a-zA-Z]/g, '');
-      a.download = `factura_compra_siigo_${nitFilename}.zip`;
+      a.download = targetZipFilename;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
-      showToast('¡Archivo .ZIP generado y descargado para Siigo!', 'success');
+      showToast(`¡Paquete ${targetZipFilename} descargado con éxito!`, 'success');
     } catch (err: any) {
       console.error('Error al empaquetar ZIP:', err);
       showToast('Error al generar el archivo .ZIP', 'error');
