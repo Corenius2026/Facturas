@@ -24,6 +24,7 @@ export async function POST(req: NextRequest) {
     const formData = await req.formData();
     const file = formData.get('file') as File | null;
     const geminiApiKeyInput = formData.get('gemini_api_key') as string | null;
+    const customModelInput = formData.get('gemini_model') as string | null;
 
     if (!file) {
       return NextResponse.json({ success: false, detail: 'No se envió ningún archivo de imagen.' }, { status: 400 });
@@ -38,13 +39,17 @@ export async function POST(req: NextRequest) {
       }, { status: 400 });
     }
 
-    // Convertir archivo a Buffer / Uint8Array
     const arrayBuffer = await file.arrayBuffer();
     const buffer = Buffer.from(arrayBuffer);
 
     // Inicializar cliente Google GenAI
     const ai = new GoogleGenAI({ apiKey: apiKeyToUse });
-    const modelToUse = process.env.GEMINI_MODEL || 'gemini-1.5-flash';
+    
+    // Modelo configurado o solicitado (gemini-3.5 prioritario)
+    const preferredModel = customModelInput?.trim() || process.env.GEMINI_MODEL || 'gemini-3.5';
+
+    // Lista ordenada de modelos a intentar para garantizar 100% de disponibilidad
+    const modelsToTry = Array.from(new Set([preferredModel, 'gemini-3.5', 'gemini-2.0-flash', 'gemini-1.5-flash']));
 
     const prompt = (
       "Eres un contador experto de minimarket. Analiza detalladamente esta foto de factura de compra o recibo de proveedor. " +
@@ -52,33 +57,51 @@ export async function POST(req: NextRequest) {
       "Devuelve un formato JSON estricto con los campos: NIT, Fecha, Subtotal, IVA, Total y TextoExtraido."
     );
 
-    const response = await ai.models.generateContent({
-      model: modelToUse,
-      contents: [
-        {
-          inlineData: {
-            mimeType: file.type || 'image/jpeg',
-            data: buffer.toString('base64'),
+    let response = null;
+    let modelUsed = '';
+    let lastError: any = null;
+
+    for (const candidateModel of modelsToTry) {
+      try {
+        response = await ai.models.generateContent({
+          model: candidateModel,
+          contents: [
+            {
+              inlineData: {
+                mimeType: file.type || 'image/jpeg',
+                data: buffer.toString('base64'),
+              },
+            },
+            { text: prompt },
+          ],
+          config: {
+            responseMimeType: 'application/json',
+            responseSchema: {
+              type: Type.OBJECT,
+              properties: {
+                NIT: { type: Type.STRING },
+                Fecha: { type: Type.STRING },
+                Subtotal: { type: Type.STRING },
+                IVA: { type: Type.STRING },
+                Total: { type: Type.STRING },
+                TextoExtraido: { type: Type.STRING },
+              },
+              required: ['NIT', 'Fecha', 'Subtotal', 'IVA', 'Total'],
+            },
           },
-        },
-        { text: prompt },
-      ],
-      config: {
-        responseMimeType: 'application/json',
-        responseSchema: {
-          type: Type.OBJECT,
-          properties: {
-            NIT: { type: Type.STRING },
-            Fecha: { type: Type.STRING },
-            Subtotal: { type: Type.STRING },
-            IVA: { type: Type.STRING },
-            Total: { type: Type.STRING },
-            TextoExtraido: { type: Type.STRING },
-          },
-          required: ['NIT', 'Fecha', 'Subtotal', 'IVA', 'Total'],
-        },
-      },
-    });
+        });
+
+        modelUsed = candidateModel;
+        break; // Éxito!
+      } catch (err: any) {
+        console.warn(`Modelo ${candidateModel} no disponible en la API de Google, probando siguiente modelo...`, err?.message);
+        lastError = err;
+      }
+    }
+
+    if (!response || !response.text) {
+      throw new Error(lastError?.message || 'No se pudo obtener respuesta de la API de Google Gemini.');
+    }
 
     const responseText = response.text || '{}';
     const datosJson = JSON.parse(responseText);
@@ -92,7 +115,7 @@ export async function POST(req: NextRequest) {
     };
 
     const xmlContent = generarXmlString(fields);
-    const rawText = datosJson.TextoExtraido || '[Analizado exitosamente con Google Gemini 2.5 Flash Vision AI]';
+    const rawText = datosJson.TextoExtraido || `[Analizado exitosamente con la API de Google Gemini (${modelUsed})]`;
 
     // Guardar en Supabase si está disponible
     let guardadoEnSupabase = false;
@@ -119,7 +142,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({
       success: true,
       filename: file.name,
-      motor_usado: `🤖 Google Gemini AI (${modelToUse})`,
+      motor_usado: `🤖 Google Gemini AI (${modelUsed})`,
       guardado_en_supabase: guardadoEnSupabase,
       raw_text: rawText,
       fields,
