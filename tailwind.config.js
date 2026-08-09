@@ -8,15 +8,16 @@ module.exports = {
   theme: {
     extend: {
       colors: {
-        navy: {
-          950: '#001D39',
-          900: '#05162a',
-          800: '#0A4174',
-          700: '#49769F',
-          600: '#4E8EA2',
-          500: '#6EA2B3',
-          400: '#7BBDE8',
-          100: '#BDD8E9',
+        brand: {
+          bg: '#EAF2F8',      // Fondo casi blanco / hielo elegante
+          card: '#FFFFFF',    // Tarjetas blancas limpias
+          navy: '#001D39',    // Azul marino oscuro para textos y cabeceras
+          primary: '#0A4174', // Azul primario para botones y acentos
+          slate: '#49769F',   // Gris azulado para bordes e iconos
+          steel: '#4E8EA2',   // Azul acero secundario
+          cyan: '#6EA2B3',    // Ciano suave
+          sky: '#7BBDE8',     // Azul cielo para detalles y badges
+          ice: '#BDD8E9',     // Azul hielo claro
         }
       },
       fontFamily: {
