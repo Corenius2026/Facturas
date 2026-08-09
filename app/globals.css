@@ -4,37 +4,22 @@
 
 @layer base {
   body {
-    @apply bg-[#090d16] text-slate-100 font-sans min-h-screen relative overflow-x-hidden antialiased;
+    @apply bg-[#001D39] text-[#BDD8E9] font-sans min-h-screen relative overflow-x-hidden antialiased;
   }
 }
 
-.blob {
-  position: absolute;
-  border-radius: 50%;
-  filter: blur(100px);
-  opacity: 0.15;
+/* Scrollbar styling */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
 }
-
-.blob-1 {
-  top: -10%;
-  left: -10%;
-  width: 500px;
-  height: 500px;
-  background: #10b981;
+::-webkit-scrollbar-track {
+  background: #001D39;
 }
-
-.blob-2 {
-  bottom: -10%;
-  right: -10%;
-  width: 550px;
-  height: 550px;
-  background: #f59e0b;
+::-webkit-scrollbar-thumb {
+  background: #49769F;
+  border-radius: 4px;
 }
-
-@keyframes spin-fast {
-  to { transform: rotate(360deg); }
-}
-
-.animate-spin-fast {
-  animation: spin-fast 0.8s linear infinite;
+::-webkit-scrollbar-thumb:hover {
+  background: #4E8EA2;
 }

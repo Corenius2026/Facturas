@@ -8,13 +8,15 @@ module.exports = {
   theme: {
     extend: {
       colors: {
-        minimarket: {
-          dark: '#090d16',
-          surface: '#0f172a',
-          card: '#1e293b',
-          emerald: '#10b981',
-          amber: '#f59e0b',
-          cyan: '#06b6d4',
+        navy: {
+          950: '#001D39',
+          900: '#05162a',
+          800: '#0A4174',
+          700: '#49769F',
+          600: '#4E8EA2',
+          500: '#6EA2B3',
+          400: '#7BBDE8',
+          100: '#BDD8E9',
         }
       },
       fontFamily: {

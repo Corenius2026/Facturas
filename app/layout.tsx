@@ -13,8 +13,8 @@ const mono = JetBrains_Mono({
 });
 
 export const metadata: Metadata = {
-  title: 'Minimarket POS AI - Facturación a XML & Supabase',
-  description: 'Digitalización inteligente de facturas de compra para minimarkets usando Google Gemini AI y Supabase en Vercel.',
+  title: 'Sistema de Procesamiento de Facturas - Minimarket POS',
+  description: 'Digitalización comercial e integración con Siigo ERP y Supabase.',
 };
 
 export default function RootLayout({
@@ -24,12 +24,8 @@ export default function RootLayout({
 }) {
   return (
     <html lang="es" className={`${jakarta.variable} ${mono.variable}`}>
-      <body>
-        <div className="fixed inset-0 pointer-events-none z-0 overflow-hidden">
-          <div className="blob blob-1" />
-          <div className="blob blob-2" />
-        </div>
-        <div className="relative z-10 max-w-7xl mx-auto p-4 sm:p-6 lg:p-8">
+      <body className="bg-[#001D39]">
+        <div className="max-w-7xl mx-auto p-4 sm:p-6 lg:p-8">
           {children}
         </div>
       </body>

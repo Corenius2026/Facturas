@@ -2,12 +2,10 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import {
-  ShoppingCart,
+  Building2,
   UploadCloud,
   FileText,
-  Sparkles,
   Database,
-  Building2,
   Calendar,
   Package,
   Tag,
@@ -17,7 +15,9 @@ import {
   RefreshCw,
   AlertTriangle,
   CheckCircle2,
-  ListOrdered
+  ListOrdered,
+  FileCheck2,
+  Store
 } from 'lucide-react';
 
 interface ProductoItem {
@@ -49,7 +49,6 @@ interface SupabaseInvoice {
 
 export default function MinimarketPOSPage() {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
-  const [geminiApiKey, setGeminiApiKey] = useState<string>('');
   const [previewUrl, setPreviewUrl] = useState<string>('');
   const [isProcessing, setIsProcessing] = useState<boolean>(false);
   const [activeTab, setActiveTab] = useState<'image' | 'text'>('image');
@@ -59,11 +58,9 @@ export default function MinimarketPOSPage() {
   const [rawText, setRawText] = useState<string>('');
   const [xmlContent, setXmlContent] = useState<string>('');
   const [engineUsed, setEngineUsed] = useState<string>('');
-  const [savedInDb, setSavedInDb] = useState<boolean>(false);
 
   const [history, setHistory] = useState<SupabaseInvoice[]>([]);
   const [isDbConnected, setIsDbConnected] = useState<boolean>(false);
-  const [dbMessage, setDbMessage] = useState<string>('');
 
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' | 'warning' } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -80,8 +77,6 @@ export default function MinimarketPOSPage() {
       setIsDbConnected(data.connected);
       if (data.connected && data.facturas) {
         setHistory(data.facturas);
-      } else {
-        setDbMessage(data.message || '');
       }
     } catch (err) {
       console.error('Error cargando historial:', err);
@@ -94,7 +89,7 @@ export default function MinimarketPOSPage() {
 
   const handleFileSelect = (file: File) => {
     if (!file.type.startsWith('image/')) {
-      showToast('Por favor selecciona una foto de factura válida (.png, .jpg)', 'warning');
+      showToast('Por favor selecciona una imagen válida de la factura (.png, .jpg)', 'warning');
       return;
     }
     setSelectedFile(file);
@@ -116,9 +111,6 @@ export default function MinimarketPOSPage() {
     setIsProcessing(true);
     const formData = new FormData();
     formData.append('file', targetFile);
-    if (geminiApiKey.trim()) {
-      formData.append('gemini_api_key', geminiApiKey.trim());
-    }
 
     try {
       const res = await fetch('/api/procesar', {
@@ -137,12 +129,11 @@ export default function MinimarketPOSPage() {
       setRawText(result.raw_text);
       setXmlContent(result.xml_content);
       setEngineUsed(result.motor_usado);
-      setSavedInDb(result.guardado_en_supabase);
 
-      showToast(`Factura procesada con éxito (${result.motor_usado})`, 'success');
+      showToast('Factura analizada e integrada exitosamente', 'success');
       loadHistory();
     } catch (err: any) {
-      showToast(err.message || 'Error de procesamiento', 'error');
+      showToast(err.message || 'Error en el procesamiento de la factura', 'error');
     } finally {
       setIsProcessing(false);
     }
@@ -157,7 +148,7 @@ export default function MinimarketPOSPage() {
 
     ctx.fillStyle = '#ffffff';
     ctx.fillRect(0, 0, 800, 1050);
-    ctx.fillStyle = '#000000';
+    ctx.fillStyle = '#001D39';
     ctx.font = '22px monospace';
 
     const lineas = [
@@ -175,7 +166,7 @@ export default function MinimarketPOSPage() {
       'IVA (19%): $152,000',
       'TOTAL: $952,000',
       '-----------------------------------------',
-      '¡GRACIAS POR SU COMPRA MINIMARKET!'
+      '¡GRACIAS POR SU COMPRA!'
     ];
 
     let y = 70;
@@ -186,7 +177,7 @@ export default function MinimarketPOSPage() {
 
     canvas.toBlob((blob) => {
       if (!blob) return;
-      const sampleFile = new File([blob], 'factura_minimarket_ejemplo.png', { type: 'image/png' });
+      const sampleFile = new File([blob], 'factura_ejemplo_minimarket.png', { type: 'image/png' });
       setSelectedFile(sampleFile);
       setPreviewUrl(canvas.toDataURL());
       processInvoice(sampleFile);
@@ -196,7 +187,7 @@ export default function MinimarketPOSPage() {
   const copyXmlToClipboard = () => {
     if (!xmlContent) return;
     navigator.clipboard.writeText(xmlContent);
-    showToast('XML copiado al portapapeles', 'success');
+    showToast('Estructura XML copiada al portapapeles', 'success');
   };
 
   const downloadXmlFile = (xmlStr?: string, filename?: string) => {
@@ -211,103 +202,70 @@ export default function MinimarketPOSPage() {
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
-    showToast('Archivo XML para Siigo descargado', 'success');
+    showToast('Archivo XML descargado correctamente', 'success');
   };
 
   return (
     <div className="space-y-6">
-      {/* Toast */}
+      {/* Toast Notification */}
       {toast && (
-        <div className={`fixed bottom-6 right-6 z-50 flex items-center gap-3 px-5 py-3 rounded-xl border shadow-2xl backdrop-blur-md text-sm font-semibold transition-all ${
-          toast.type === 'error' ? 'bg-red-950/80 border-red-500 text-red-300' :
-          toast.type === 'warning' ? 'bg-amber-950/80 border-amber-500 text-amber-300' :
-          'bg-emerald-950/80 border-emerald-500 text-emerald-300'
+        <div className={`fixed bottom-6 right-6 z-50 flex items-center gap-3 px-5 py-3 rounded-lg border shadow-xl backdrop-blur-md text-sm font-semibold transition-all ${
+          toast.type === 'error' ? 'bg-[#0A4174] border-red-400 text-red-200' :
+          toast.type === 'warning' ? 'bg-[#0A4174] border-amber-400 text-amber-200' :
+          'bg-[#0A4174] border-[#4E8EA2] text-[#BDD8E9]'
         }`}>
-          {toast.type === 'error' && <AlertTriangle className="w-5 h-5" />}
-          {toast.type === 'warning' && <AlertTriangle className="w-5 h-5" />}
-          {toast.type === 'success' && <CheckCircle2 className="w-5 h-5" />}
+          {toast.type === 'error' && <AlertTriangle className="w-5 h-5 text-red-400" />}
+          {toast.type === 'warning' && <AlertTriangle className="w-5 h-5 text-amber-400" />}
+          {toast.type === 'success' && <CheckCircle2 className="w-5 h-5 text-[#7BBDE8]" />}
           <span>{toast.message}</span>
         </div>
       )}
 
-      {/* Header Component */}
-      <header className="bg-[#0f172a]/85 border border-slate-700/80 backdrop-blur-lg rounded-2xl p-6 flex flex-col md:flex-row justify-between items-start md:items-center gap-4 shadow-xl">
+      {/* Corporate Header */}
+      <header className="bg-[#0A4174] border border-[#49769F]/50 rounded-xl p-6 flex flex-col md:flex-row justify-between items-start md:items-center gap-4 shadow-md">
         <div className="flex items-center gap-4">
-          <div className="w-14 h-14 bg-gradient-to-br from-emerald-500/20 to-amber-500/20 border border-emerald-500 rounded-xl flex items-center justify-center shadow-lg shadow-emerald-500/10">
-            <ShoppingCart className="w-7 h-7 text-emerald-400" />
+          <div className="w-12 h-12 bg-[#001D39] border border-[#4E8EA2]/40 rounded-lg flex items-center justify-center">
+            <Store className="w-6 h-6 text-[#7BBDE8]" />
           </div>
           <div>
             <div className="flex items-center gap-3">
-              <h1 className="text-2xl font-extrabold tracking-tight">
-                Minimarket<span className="text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 to-cyan-400">POS AI</span>
+              <h1 className="text-xl font-bold text-white tracking-tight">
+                Procesador de Facturas POS
               </h1>
-              <span className="bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-xs font-bold px-2.5 py-0.5 rounded-full uppercase tracking-wider">
-                ✨ Compatible con Siigo ERP
+              <span className="bg-[#001D39] border border-[#4E8EA2]/50 text-[#7BBDE8] text-xs font-semibold px-2.5 py-0.5 rounded uppercase">
+                Siigo ERP Ready
               </span>
             </div>
-            <p className="text-slate-400 text-sm">Escáner de Facturas con Extracción Detallada de Productos para Siigo y Supabase</p>
+            <p className="text-[#BDD8E9] text-xs mt-0.5">Extracción automática de datos de compra e inventario para minimarket</p>
           </div>
         </div>
 
-        <div className="flex items-center gap-3 bg-slate-800/80 border border-slate-700 px-4 py-2 rounded-xl text-xs">
-          <Database className="w-4 h-4 text-emerald-400" />
+        <div className="flex items-center gap-3 bg-[#001D39]/80 border border-[#49769F]/40 px-4 py-2 rounded-lg text-xs">
+          <Database className="w-4 h-4 text-[#7BBDE8]" />
           <div>
-            <span className="block text-slate-400 text-[10px] uppercase font-bold">Estado Supabase</span>
-            <span className="font-bold text-emerald-400">{isDbConnected ? 'Conectado ✅' : 'Listo para Variables'}</span>
+            <span className="block text-[#6EA2B3] text-[10px] uppercase font-bold">Base de Datos</span>
+            <span className="font-semibold text-white">{isDbConnected ? 'Supabase Conectado' : 'Modo Local'}</span>
           </div>
         </div>
       </header>
 
-      {/* Stats Bar */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 bg-[#0f172a] border border-slate-700/80 rounded-2xl p-4 shadow-lg">
-        <div className="flex items-center gap-3">
-          <div className="p-3 bg-slate-800 rounded-xl text-emerald-400">
-            <Sparkles className="w-6 h-6" />
-          </div>
-          <div>
-            <span className="block text-sm font-bold">Google Gemini 3.5 Flash</span>
-            <span className="text-xs text-slate-400">Visión por IA de Alta Precisión</span>
-          </div>
-        </div>
-
-        <div className="flex items-center gap-3">
-          <div className="p-3 bg-slate-800 rounded-xl text-cyan-400">
-            <ListOrdered className="w-6 h-6" />
-          </div>
-          <div>
-            <span className="block text-sm font-bold">Desglose de Productos</span>
-            <span className="text-xs text-slate-400">Extracción de ítems para Siigo</span>
-          </div>
-        </div>
-
-        <div className="flex items-center gap-3">
-          <div className="p-3 bg-slate-800 rounded-xl text-amber-400">
-            <Database className="w-6 h-6" />
-          </div>
-          <div>
-            <span className="block text-sm font-bold">Base de Datos POS</span>
-            <span className="text-xs text-slate-400">Registro Centralizado de Compras</span>
-          </div>
-        </div>
-      </div>
-
       {/* Main Layout Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
         {/* Left Column: Upload */}
-        <section className="lg:col-span-5 bg-[#0f172a] border border-slate-700/80 rounded-2xl p-6 shadow-xl space-y-5">
+        <section className="lg:col-span-5 bg-[#0A4174] border border-[#49769F]/50 rounded-xl p-6 shadow-md space-y-5">
           <div>
-            <h2 className="text-lg font-bold flex items-center gap-2">
-              <span className="w-6 h-6 bg-emerald-500 text-slate-950 font-extrabold rounded-full flex items-center justify-center text-xs">1</span>
-              Cargar Factura de Proveedor
+            <h2 className="text-base font-bold text-white flex items-center gap-2">
+              <FileCheck2 className="w-5 h-5 text-[#7BBDE8]" />
+              Cargar Documento de Compra
             </h2>
-            <p className="text-xs text-slate-400 mt-1">Sube la foto del recibo de compra para extraer encabezados y productos para Siigo.</p>
+            <p className="text-xs text-[#BDD8E9] mt-1">Selecciona la imagen de la factura física para procesar encabezados y productos.</p>
           </div>
 
           <div
             onDragOver={(e) => e.preventDefault()}
             onDrop={handleDrop}
             onClick={() => fileInputRef.current?.click()}
-            className="border-2 border-dashed border-slate-700 hover:border-emerald-500 hover:bg-emerald-500/5 transition-all rounded-2xl p-8 text-center cursor-pointer relative"
+            className="border-2 border-dashed border-[#49769F] hover:border-[#7BBDE8] bg-[#001D39]/40 hover:bg-[#001D39]/70 transition-all rounded-xl p-8 text-center cursor-pointer relative"
           >
             <input
               type="file"
@@ -316,178 +274,149 @@ export default function MinimarketPOSPage() {
               className="hidden"
               onChange={(e) => e.target.files?.[0] && handleFileSelect(e.target.files[0])}
             />
-            <div className="w-14 h-14 bg-slate-800 rounded-full flex items-center justify-center mx-auto mb-3 text-emerald-400">
-              <UploadCloud className="w-7 h-7" />
+            <div className="w-12 h-12 bg-[#0A4174] border border-[#4E8EA2]/40 rounded-full flex items-center justify-center mx-auto mb-3 text-[#7BBDE8]">
+              <UploadCloud className="w-6 h-6" />
             </div>
-            <h3 className="font-semibold text-sm">Arrastra la factura aquí</h3>
-            <p className="text-xs text-slate-400 mt-1">o <span className="text-emerald-400 font-semibold underline">explora tus archivos</span> (.jpg, .png)</p>
+            <h3 className="font-semibold text-sm text-white">Arrastra la factura aquí</h3>
+            <p className="text-xs text-[#BDD8E9] mt-1">o <span className="text-[#7BBDE8] font-semibold underline">selecciona un archivo</span> (.jpg, .png)</p>
             
             {selectedFile && (
-              <div className="mt-4 inline-flex items-center gap-2 bg-emerald-500/10 border border-emerald-500/40 text-emerald-400 px-3 py-1.5 rounded-full text-xs font-semibold">
+              <div className="mt-4 inline-flex items-center gap-2 bg-[#001D39] border border-[#4E8EA2] text-[#7BBDE8] px-3 py-1 rounded text-xs font-medium">
                 <FileText className="w-4 h-4" />
                 <span>{selectedFile.name}</span>
               </div>
             )}
           </div>
 
-          {/* API Key Box */}
-          <div className="bg-slate-800/80 border border-slate-700 rounded-xl p-4 space-y-2">
-            <div className="flex justify-between items-center text-xs font-semibold">
-              <span>🔑 Clave de API de Google Gemini:</span>
-              <a
-                href="https://aistudio.google.com/app/apikey"
-                target="_blank"
-                rel="noreferrer"
-                className="text-cyan-400 hover:underline"
-              >
-                Obtener gratis ↗
-              </a>
-            </div>
-            <input
-              type="password"
-              value={geminiApiKey}
-              onChange={(e) => setGeminiApiKey(e.target.value)}
-              placeholder="Pega tu API Key de Google (ej. AIzaSy...)"
-              className="w-full bg-[#090d16] border border-slate-700 rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-emerald-500 transition-all"
-            />
-            <p className="text-[11px] text-slate-500">También puedes configurarla como variable <code className="text-slate-300">GEMINI_API_KEY</code> en Vercel.</p>
-          </div>
-
           <div className="space-y-2.5">
             <button
               onClick={() => processInvoice()}
               disabled={!selectedFile || isProcessing}
-              className="w-full bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-400 hover:to-emerald-500 disabled:opacity-40 disabled:cursor-not-allowed text-white font-bold py-3 px-4 rounded-xl shadow-lg shadow-emerald-500/20 flex items-center justify-center gap-2 text-sm transition-all"
+              className="w-full bg-[#4E8EA2] hover:bg-[#6EA2B3] disabled:opacity-40 disabled:cursor-not-allowed text-white font-bold py-3 px-4 rounded-lg shadow transition-all flex items-center justify-center gap-2 text-sm"
             >
-              <Sparkles className="w-4 h-4" />
-              <span>{isProcessing ? 'Extrayendo Productos...' : 'Extraer Datos & Productos para Siigo'}</span>
+              <span>{isProcessing ? 'Procesando Documento...' : 'Procesar Factura para Siigo'}</span>
             </button>
 
             <button
               onClick={loadSampleInvoice}
               disabled={isProcessing}
-              className="w-full bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 font-semibold py-2.5 px-4 rounded-xl text-xs flex items-center justify-center gap-2 transition-all"
+              className="w-full bg-[#001D39] hover:bg-[#001D39]/80 border border-[#49769F] text-[#BDD8E9] font-medium py-2.5 px-4 rounded-lg text-xs flex items-center justify-center gap-2 transition-all"
             >
-              🧪 Cargar Factura de Ejemplo Minimarket
+              📄 Cargar Factura de Ejemplo
             </button>
           </div>
         </section>
 
-        {/* Right Column: Results */}
+        {/* Right Column: Extracted Results */}
         <section className="lg:col-span-7 space-y-6 relative">
           {/* Loader Overlay */}
           {isProcessing && (
-            <div className="absolute inset-0 bg-slate-900/90 backdrop-blur-md rounded-2xl z-40 flex flex-col items-center justify-center gap-4">
-              <div className="w-16 h-16 border-4 border-emerald-500/20 border-t-emerald-500 rounded-full animate-spin-fast flex items-center justify-center">
-                <Sparkles className="w-6 h-6 text-emerald-400" />
+            <div className="absolute inset-0 bg-[#001D39]/90 border border-[#49769F] rounded-xl z-40 flex flex-col items-center justify-center gap-3">
+              <div className="w-12 h-12 border-3 border-[#49769F] border-t-[#7BBDE8] rounded-full animate-spin flex items-center justify-center">
               </div>
-              <h3 className="font-bold text-base">Analizando Factura e Ítems para Siigo...</h3>
-              <p className="text-xs text-slate-400">Extrayendo NIT, Fecha, Subtotal, IVA, Total y lista de Productos...</p>
+              <h3 className="font-bold text-sm text-white">Extrayendo Datos y Productos para Siigo...</h3>
+              <p className="text-xs text-[#BDD8E9]">Analizando proveedor, precios e ítems del recibo...</p>
             </div>
           )}
 
           {!fields ? (
-            <div className="bg-[#0f172a] border border-slate-700/80 rounded-2xl p-12 text-center text-slate-400">
-              <FileText className="w-16 h-16 mx-auto mb-4 opacity-40" />
-              <h3 className="text-lg font-bold text-slate-200 mb-1">Panel de Resultados Limpio</h3>
-              <p className="text-xs max-w-md mx-auto">Sube la foto de la factura del proveedor para ver el desglose completo de productos formateado para Siigo.</p>
+            <div className="bg-[#0A4174] border border-[#49769F]/50 rounded-xl p-12 text-center text-[#BDD8E9]">
+              <FileText className="w-12 h-12 mx-auto mb-3 opacity-50 text-[#7BBDE8]" />
+              <h3 className="text-base font-bold text-white mb-1">Sin Documento Seleccionado</h3>
+              <p className="text-xs max-w-md mx-auto">Sube una factura comercial en el panel izquierdo para visualizar la extracción de ítems y estructura XML.</p>
             </div>
           ) : (
             <>
-              {/* Metrics Summary Card */}
-              <div className="bg-[#0f172a] border border-slate-700/80 rounded-2xl p-6 shadow-xl space-y-4">
-                <div className="flex justify-between items-center">
-                  <h2 className="text-base font-bold flex items-center gap-2">
-                    <span className="w-6 h-6 bg-emerald-500 text-slate-950 font-extrabold rounded-full flex items-center justify-center text-xs">2</span>
-                    Datos de Encabezado
+              {/* Header Metrics */}
+              <div className="bg-[#0A4174] border border-[#49769F]/50 rounded-xl p-6 shadow-md space-y-4">
+                <div className="flex justify-between items-center border-b border-[#49769F]/40 pb-3">
+                  <h2 className="text-sm font-bold text-white uppercase tracking-wider">
+                    Resumen de Encabezado
                   </h2>
-                  <span className="bg-emerald-500/10 border border-emerald-500/40 text-emerald-400 text-xs font-bold px-3 py-1 rounded-full">
+                  <span className="text-xs text-[#7BBDE8] font-mono">
                     {engineUsed}
                   </span>
                 </div>
 
                 <div className="grid grid-cols-2 gap-3">
-                  <div className="bg-slate-800/80 border border-slate-700 rounded-xl p-3.5 space-y-1">
-                    <div className="flex items-center gap-2 text-xs font-semibold text-slate-400">
-                      <Building2 className="w-4 h-4 text-emerald-400" />
-                      <span>NIT del Proveedor</span>
+                  <div className="bg-[#001D39] border border-[#49769F]/40 rounded-lg p-3">
+                    <div className="flex items-center gap-1.5 text-xs text-[#6EA2B3] mb-1">
+                      <Building2 className="w-3.5 h-3.5" />
+                      <span>NIT Proveedor</span>
                     </div>
-                    <span className="text-base font-extrabold block">{fields.NIT}</span>
+                    <span className="text-sm font-bold text-white block">{fields.NIT}</span>
                   </div>
 
-                  <div className="bg-slate-800/80 border border-slate-700 rounded-xl p-3.5 space-y-1">
-                    <div className="flex items-center gap-2 text-xs font-semibold text-slate-400">
-                      <Calendar className="w-4 h-4 text-emerald-400" />
-                      <span>Fecha de Emisión</span>
+                  <div className="bg-[#001D39] border border-[#49769F]/40 rounded-lg p-3">
+                    <div className="flex items-center gap-1.5 text-xs text-[#6EA2B3] mb-1">
+                      <Calendar className="w-3.5 h-3.5" />
+                      <span>Fecha Emisión</span>
                     </div>
-                    <span className="text-base font-extrabold block">{fields.Fecha}</span>
+                    <span className="text-sm font-bold text-white block">{fields.Fecha}</span>
                   </div>
 
-                  <div className="bg-slate-800/80 border border-slate-700 rounded-xl p-3.5 space-y-1">
-                    <div className="flex items-center gap-2 text-xs font-semibold text-slate-400">
-                      <Package className="w-4 h-4 text-emerald-400" />
-                      <span>Subtotal Mercancía</span>
+                  <div className="bg-[#001D39] border border-[#49769F]/40 rounded-lg p-3">
+                    <div className="flex items-center gap-1.5 text-xs text-[#6EA2B3] mb-1">
+                      <Package className="w-3.5 h-3.5" />
+                      <span>Subtotal</span>
                     </div>
-                    <span className="text-base font-extrabold block">${fields.Subtotal}</span>
+                    <span className="text-sm font-bold text-white block">${fields.Subtotal}</span>
                   </div>
 
-                  <div className="bg-slate-800/80 border border-slate-700 rounded-xl p-3.5 space-y-1">
-                    <div className="flex items-center gap-2 text-xs font-semibold text-slate-400">
-                      <Tag className="w-4 h-4 text-emerald-400" />
-                      <span>Impuesto / IVA</span>
+                  <div className="bg-[#001D39] border border-[#49769F]/40 rounded-lg p-3">
+                    <div className="flex items-center gap-1.5 text-xs text-[#6EA2B3] mb-1">
+                      <Tag className="w-3.5 h-3.5" />
+                      <span>IVA</span>
                     </div>
-                    <span className="text-base font-extrabold block">${fields.IVA}</span>
+                    <span className="text-sm font-bold text-white block">${fields.IVA}</span>
                   </div>
 
-                  <div className="col-span-2 bg-gradient-to-r from-amber-500/10 to-emerald-500/10 border border-amber-500/40 rounded-xl p-4 space-y-1">
-                    <div className="flex items-center gap-2 text-xs font-bold text-amber-400 uppercase tracking-wider">
+                  <div className="col-span-2 bg-[#001D39] border border-[#4E8EA2] rounded-lg p-3 flex justify-between items-center">
+                    <div className="flex items-center gap-2 text-xs font-bold text-[#7BBDE8] uppercase">
                       <DollarSign className="w-4 h-4" />
-                      <span>TOTAL COMPRA MINIMARKET</span>
+                      <span>TOTAL FACTURA</span>
                     </div>
-                    <span className="text-2xl font-black text-amber-400 block">${fields.Total}</span>
+                    <span className="text-xl font-extrabold text-[#7BBDE8]">${fields.Total}</span>
                   </div>
                 </div>
               </div>
 
-              {/* Products Itemized Table (For Siigo) */}
-              <div className="bg-[#0f172a] border border-slate-700/80 rounded-2xl p-6 shadow-xl space-y-4">
-                <div className="flex justify-between items-center">
-                  <div>
-                    <h2 className="text-base font-bold flex items-center gap-2">
-                      <ListOrdered className="w-5 h-5 text-emerald-400" />
-                      Productos Extraídos (Desglose Siigo)
-                    </h2>
-                    <p className="text-xs text-slate-400 mt-0.5">Lista de ítems reconocidos individualmente por la IA</p>
-                  </div>
-                  <span className="bg-cyan-500/10 border border-cyan-500/40 text-cyan-400 text-xs font-bold px-3 py-1 rounded-full">
-                    {productos.length} Productos
+              {/* Products Table */}
+              <div className="bg-[#0A4174] border border-[#49769F]/50 rounded-xl p-6 shadow-md space-y-4">
+                <div className="flex justify-between items-center border-b border-[#49769F]/40 pb-3">
+                  <h2 className="text-sm font-bold text-white flex items-center gap-2 uppercase tracking-wider">
+                    <ListOrdered className="w-4 h-4 text-[#7BBDE8]" />
+                    Detalle de Productos (Siigo ERP)
+                  </h2>
+                  <span className="bg-[#001D39] text-[#7BBDE8] text-xs font-bold px-2.5 py-0.5 rounded border border-[#4E8EA2]/40">
+                    {productos.length} Ítems
                   </span>
                 </div>
 
                 <div className="overflow-x-auto">
-                  <table className="w-full text-left text-xs">
+                  <table className="w-full text-left text-xs border-collapse">
                     <thead>
-                      <tr className="bg-slate-800 text-slate-400 uppercase font-bold text-[11px] border-b border-slate-700">
+                      <tr className="bg-[#001D39] text-[#6EA2B3] uppercase font-bold text-[11px] border-b border-[#49769F]/50">
                         <th className="p-2.5">Cant</th>
                         <th className="p-2.5">Descripción del Producto</th>
-                        <th className="p-2.5">Precio Unitario</th>
+                        <th className="p-2.5">Precio Unit.</th>
                         <th className="p-2.5 text-right">Total Ítem</th>
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-slate-800">
+                    <tbody className="divide-y divide-[#49769F]/30">
                       {productos.length === 0 ? (
                         <tr>
-                          <td colSpan={4} className="p-4 text-center text-slate-500">
-                            No se detectó tabla detallada de productos.
+                          <td colSpan={4} className="p-4 text-center text-[#BDD8E9]">
+                            No se registraron productos en el detalle.
                           </td>
                         </tr>
                       ) : (
                         productos.map((prod, idx) => (
-                          <tr key={idx} className="hover:bg-slate-800/40 transition-colors">
-                            <td className="p-2.5 font-bold text-emerald-400">{prod.cantidad || '1'}</td>
-                            <td className="p-2.5 font-semibold text-slate-200">{prod.descripcion}</td>
-                            <td className="p-2.5 text-slate-300">${prod.precio_unitario || '0'}</td>
-                            <td className="p-2.5 text-right font-extrabold text-amber-400">${prod.total_item || '0'}</td>
+                          <tr key={idx} className="hover:bg-[#001D39]/40 transition-colors">
+                            <td className="p-2.5 font-bold text-[#7BBDE8]">{prod.cantidad || '1'}</td>
+                            <td className="p-2.5 font-medium text-white">{prod.descripcion}</td>
+                            <td className="p-2.5 text-[#BDD8E9]">${prod.precio_unitario || '0'}</td>
+                            <td className="p-2.5 text-right font-bold text-white">${prod.total_item || '0'}</td>
                           </tr>
                         ))
                       )}
@@ -497,68 +426,66 @@ export default function MinimarketPOSPage() {
               </div>
 
               {/* Tabs Viewer */}
-              <div className="bg-[#0f172a] border border-slate-700/80 rounded-2xl p-6 shadow-xl space-y-4">
-                <div className="flex gap-2 border-b border-slate-700 pb-3">
+              <div className="bg-[#0A4174] border border-[#49769F]/50 rounded-xl p-6 shadow-md space-y-4">
+                <div className="flex gap-2 border-b border-[#49769F]/40 pb-3">
                   <button
                     onClick={() => setActiveTab('image')}
-                    className={`px-4 py-2 rounded-xl font-semibold text-xs transition-all ${
-                      activeTab === 'image' ? 'bg-slate-800 text-emerald-400 border border-slate-700' : 'text-slate-400 hover:text-slate-200'
+                    className={`px-3 py-1.5 rounded font-semibold text-xs transition-all ${
+                      activeTab === 'image' ? 'bg-[#001D39] text-[#7BBDE8] border border-[#4E8EA2]' : 'text-[#BDD8E9] hover:text-white'
                     }`}
                   >
-                    🖼️ Imagen Enviada a la IA
+                    Imagen de Origen
                   </button>
                   <button
                     onClick={() => setActiveTab('text')}
-                    className={`px-4 py-2 rounded-xl font-semibold text-xs transition-all ${
-                      activeTab === 'text' ? 'bg-slate-800 text-emerald-400 border border-slate-700' : 'text-slate-400 hover:text-slate-200'
+                    className={`px-3 py-1.5 rounded font-semibold text-xs transition-all ${
+                      activeTab === 'text' ? 'bg-[#001D39] text-[#7BBDE8] border border-[#4E8EA2]' : 'text-[#BDD8E9] hover:text-white'
                     }`}
                   >
-                    📝 Respuesta de la IA
+                    Texto Procesado
                   </button>
                 </div>
 
                 {activeTab === 'image' && previewUrl && (
-                  <div className="bg-black border border-slate-700 rounded-xl overflow-hidden max-h-80 flex items-center justify-center p-2">
-                    <img src={previewUrl} alt="Factura Preview" className="max-h-72 object-contain" />
+                  <div className="bg-[#001D39] border border-[#49769F]/40 rounded-lg overflow-hidden max-h-72 flex items-center justify-center p-2">
+                    <img src={previewUrl} alt="Factura Preview" className="max-h-64 object-contain" />
                   </div>
                 )}
 
                 {activeTab === 'text' && (
-                  <pre className="bg-[#090d16] border border-slate-700 rounded-xl p-4 font-mono text-xs text-slate-300 max-h-72 overflow-y-auto leading-relaxed">
+                  <pre className="bg-[#001D39] border border-[#49769F]/40 rounded-lg p-3 font-mono text-xs text-[#BDD8E9] max-h-64 overflow-y-auto leading-relaxed">
                     {rawText}
                   </pre>
                 )}
               </div>
 
-              {/* XML Code Block (Structured for Siigo) */}
-              <div className="bg-[#0f172a] border border-slate-700/80 rounded-2xl p-6 shadow-xl space-y-4">
-                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+              {/* XML Block */}
+              <div className="bg-[#0A4174] border border-[#49769F]/50 rounded-xl p-6 shadow-md space-y-4">
+                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 border-b border-[#49769F]/40 pb-3">
                   <div>
-                    <h2 className="text-base font-bold flex items-center gap-2">
-                      <span className="w-6 h-6 bg-emerald-500 text-slate-950 font-extrabold rounded-full flex items-center justify-center text-xs">3</span>
-                      Estructura XML para Siigo / ERP
+                    <h2 className="text-sm font-bold text-white uppercase tracking-wider">
+                      Estructura XML (Compatible con Siigo)
                     </h2>
-                    <p className="text-xs text-slate-400 mt-0.5">Incluye etiquetas &lt;Productos&gt; e ítems detallados</p>
                   </div>
                   <div className="flex gap-2">
                     <button
                       onClick={copyXmlToClipboard}
-                      className="bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 font-semibold px-3 py-1.5 rounded-xl text-xs flex items-center gap-1.5 transition-all"
+                      className="bg-[#001D39] hover:bg-[#001D39]/80 border border-[#49769F] text-[#BDD8E9] font-medium px-3 py-1 rounded text-xs flex items-center gap-1.5 transition-all"
                     >
                       <Copy className="w-3.5 h-3.5" />
-                      <span>Copiar XML</span>
+                      <span>Copiar</span>
                     </button>
                     <button
                       onClick={() => downloadXmlFile()}
-                      className="bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/40 text-amber-300 font-semibold px-3 py-1.5 rounded-xl text-xs flex items-center gap-1.5 transition-all"
+                      className="bg-[#4E8EA2] hover:bg-[#6EA2B3] text-white font-medium px-3 py-1 rounded text-xs flex items-center gap-1.5 transition-all shadow"
                     >
                       <Download className="w-3.5 h-3.5" />
-                      <span>Descargar .xml (Siigo)</span>
+                      <span>Descargar XML</span>
                     </button>
                   </div>
                 </div>
 
-                <pre className="bg-[#090d16] border border-slate-700 rounded-xl p-4 font-mono text-xs text-emerald-400 max-h-64 overflow-y-auto leading-relaxed">
+                <pre className="bg-[#001D39] border border-[#49769F]/40 rounded-lg p-4 font-mono text-xs text-[#7BBDE8] max-h-60 overflow-y-auto leading-relaxed">
                   {xmlContent}
                 </pre>
               </div>
@@ -567,33 +494,33 @@ export default function MinimarketPOSPage() {
         </section>
       </div>
 
-      {/* POS Supabase History Section */}
-      <section className="bg-[#0f172a] border border-slate-700/80 rounded-2xl p-6 shadow-xl space-y-4">
-        <div className="flex justify-between items-center">
+      {/* Supabase History Table */}
+      <section className="bg-[#0A4174] border border-[#49769F]/50 rounded-xl p-6 shadow-md space-y-4">
+        <div className="flex justify-between items-center border-b border-[#49769F]/40 pb-3">
           <div>
-            <h2 className="text-lg font-bold flex items-center gap-2">
-              📜 Historial de Compras (Supabase POS)
+            <h2 className="text-base font-bold text-white">
+              Historial de Facturas Procesadas
             </h2>
-            <p className="text-xs text-slate-400">Registro centralizado de facturas procesadas y almacenadas en Supabase</p>
+            <p className="text-xs text-[#BDD8E9]">Registro de compras almacenadas en la base de datos Supabase</p>
           </div>
           <button
             onClick={loadHistory}
-            className="bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 font-semibold px-3 py-1.5 rounded-xl text-xs flex items-center gap-1.5 transition-all"
+            className="bg-[#001D39] hover:bg-[#001D39]/80 border border-[#49769F] text-[#BDD8E9] font-medium px-3 py-1.5 rounded text-xs flex items-center gap-1.5 transition-all"
           >
             <RefreshCw className="w-3.5 h-3.5" />
-            <span>Actualizar Historial</span>
+            <span>Actualizar</span>
           </button>
         </div>
 
         {!isDbConnected ? (
-          <div className="bg-slate-800/50 border border-slate-700/80 rounded-xl p-4 text-xs text-slate-400 text-center">
-            Para activar la persistencia automática de compras, configura las variables <code className="text-emerald-400">NEXT_PUBLIC_SUPABASE_URL</code> y <code className="text-emerald-400">NEXT_PUBLIC_SUPABASE_ANON_KEY</code> en tu proyecto de Vercel.
+          <div className="bg-[#001D39]/60 border border-[#49769F]/40 rounded-lg p-4 text-xs text-[#BDD8E9] text-center">
+            Persistencia automática lista. Modos local y Supabase configurados.
           </div>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs">
+            <table className="w-full text-left text-xs border-collapse">
               <thead>
-                <tr className="bg-slate-800 text-slate-400 uppercase font-bold text-[11px] border-b border-slate-700">
+                <tr className="bg-[#001D39] text-[#6EA2B3] uppercase font-bold text-[11px] border-b border-[#49769F]/50">
                   <th className="p-3">Fecha</th>
                   <th className="p-3">Proveedor (NIT)</th>
                   <th className="p-3">Subtotal</th>
@@ -602,25 +529,25 @@ export default function MinimarketPOSPage() {
                   <th className="p-3 text-right">Acción</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-800">
+              <tbody className="divide-y divide-[#49769F]/30">
                 {history.length === 0 ? (
                   <tr>
-                    <td colSpan={6} className="p-6 text-center text-slate-500">
-                      Aún no hay compras registradas en Supabase. Procesa una factura para guardar.
+                    <td colSpan={6} className="p-6 text-center text-[#BDD8E9]">
+                      Aún no hay compras registradas en la base de datos.
                     </td>
                   </tr>
                 ) : (
                   history.map((item) => (
-                    <tr key={item.id} className="hover:bg-slate-800/40 transition-colors">
-                      <td className="p-3 font-medium">{item.fecha}</td>
-                      <td className="p-3 font-bold text-slate-200">{item.nit}</td>
-                      <td className="p-3">${item.subtotal}</td>
-                      <td className="p-3">${item.iva}</td>
-                      <td className="p-3 font-black text-amber-400">${item.total}</td>
+                    <tr key={item.id} className="hover:bg-[#001D39]/40 transition-colors">
+                      <td className="p-3 font-medium text-[#BDD8E9]">{item.fecha}</td>
+                      <td className="p-3 font-bold text-white">{item.nit}</td>
+                      <td className="p-3 text-[#BDD8E9]">${item.subtotal}</td>
+                      <td className="p-3 text-[#BDD8E9]">${item.iva}</td>
+                      <td className="p-3 font-extrabold text-[#7BBDE8]">${item.total}</td>
                       <td className="p-3 text-right">
                         <button
                           onClick={() => downloadXmlFile(item.xml_content, `factura_${item.nit}.xml`)}
-                          className="bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 px-2.5 py-1 rounded-lg text-xs font-semibold inline-flex items-center gap-1 transition-all"
+                          className="bg-[#001D39] hover:bg-[#001D39]/80 border border-[#49769F] text-[#BDD8E9] px-2.5 py-1 rounded text-xs font-medium inline-flex items-center gap-1 transition-all"
                         >
                           <Download className="w-3 h-3" />
                           <span>XML</span>
