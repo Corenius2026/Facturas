@@ -168,6 +168,11 @@ def index():
             return f.read()
     return "<h1>Error: index.html no encontrado en static/</h1>"
 
+@app.get("/favicon.ico", include_in_schema=False)
+def favicon():
+    """Responde a las peticiones automaticas de favicon del navegador."""
+    return Response(status_code=204)
+
 @app.post("/api/procesar")
 async def API_procesar_factura(file: UploadFile = File(...)):
     """
