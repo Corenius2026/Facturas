@@ -275,7 +275,7 @@ export default function MinimarketPOSPage() {
             </div>
           </div>
 
-          <div className="space-y-3 pt-2">
+          <div className="pt-2">
             <button
               onClick={() => processInvoice()}
               disabled={!selectedFile || isProcessing}
@@ -283,14 +283,6 @@ export default function MinimarketPOSPage() {
             >
               <Sparkles className="w-4 h-4 text-[#7BBDE8]" />
               <span>{isProcessing ? 'Procesando Documento...' : 'Procesar Factura'}</span>
-            </button>
-
-            <button
-              onClick={loadSampleInvoice}
-              disabled={isProcessing}
-              className="w-full bg-[#EAF2F8] hover:bg-[#BDD8E9]/60 text-[#001D39] font-bold py-2.5 px-4 rounded-xl text-xs flex items-center justify-center gap-2 transition-all border border-[#BDD8E9]"
-            >
-              📄 Cargar Factura de Prueba
             </button>
           </div>
         </section>
