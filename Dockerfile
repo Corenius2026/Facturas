@@ -1,11 +1,14 @@
-# Imagen base de Python en Linux
+# Imagen base de Python en Linux (Debian 12 Bookworm)
 FROM python:3.11-slim
 
-# Instalar Tesseract OCR y el paquete de idioma español ('spa') a nivel de Servidor Web
-RUN apt-get update && apt-get install -y \
+# Evitar prompts interactivos durante la instalación de apt
+ENV DEBIAN_FRONTEND=noninteractive
+
+# Instalar Tesseract OCR, soporte para español y librerías necesarias para OpenCV (libgl1)
+RUN apt-get update && apt-get install -y --no-install-recommends \
     tesseract-ocr \
     tesseract-ocr-spa \
-    libgl1-mesa-glx \
+    libgl1 \
     libglib2.0-0 \
     && rm -rf /var/lib/apt/lists/*
 
@@ -16,11 +19,11 @@ WORKDIR /app
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copiar el código del proyecto (app.py, static/, etc.)
+# Copiar el código del proyecto
 COPY . .
 
 # Puerto expuesto para la Web
 EXPOSE 8000
 
-# Comando de inicio del servidor en producción
+# Comando de inicio del servidor web FastAPI
 CMD ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8000"]
