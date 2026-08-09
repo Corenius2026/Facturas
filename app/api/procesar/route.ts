@@ -31,14 +31,14 @@ const MINIMAL_PDF_BASE64 = (
 );
 
 // Genera la estructura idéntica requerida por Siigo Nube basándonos en el archivo de muestra oficial
-function generarEstructuraSiigoIdentica(datos: FacturaDatos): {
+async function generarEstructuraSiigoIdentica(datos: FacturaDatos): Promise<{
   attachedXml: string;
   invoiceXml: string;
   zipFilename: string;
   xmlFilenameInside: string;
   pdfFilenameInside: string;
   zipBase64: string;
-} {
+}> {
   const nitProvRaw = (datos.NIT || '822007117').replace(/[^0-9]/g, '');
   const nitProvPadded = nitProvRaw.padStart(10, '0');
   const nitBuyerRaw = (datos.BuyerNIT || '901584216').replace(/[^0-9]/g, '');
@@ -254,7 +254,7 @@ ${productosXmlLines}
   // Generar base64
   let zipBase64 = '';
   try {
-    zipBase64 = Buffer.from(zip.generateInternalStream({ type: 'uint8array' }).accumulate()).toString('base64');
+    zipBase64 = await zip.generateAsync({ type: 'base64' });
   } catch (e) {
     console.error('Error generando zip base64:', e);
   }
@@ -375,7 +375,7 @@ export async function POST(req: NextRequest) {
       Productos: datosJson.Productos || [],
     };
 
-    const est = generarEstructuraSiigoIdentica(fields);
+    const est = await generarEstructuraSiigoIdentica(fields);
     const rawText = datosJson.TextoExtraido || `[Analizado exitosamente con la API de Google Gemini (${modelUsed})]`;
 
     // Guardar en Supabase si está disponible
