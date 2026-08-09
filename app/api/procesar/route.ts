@@ -44,6 +44,7 @@ export async function POST(req: NextRequest) {
 
     // Inicializar cliente Google GenAI
     const ai = new GoogleGenAI({ apiKey: apiKeyToUse });
+    const modelToUse = process.env.GEMINI_MODEL || 'gemini-1.5-flash';
 
     const prompt = (
       "Eres un contador experto de minimarket. Analiza detalladamente esta foto de factura de compra o recibo de proveedor. " +
@@ -52,7 +53,7 @@ export async function POST(req: NextRequest) {
     );
 
     const response = await ai.models.generateContent({
-      model: 'gemini-2.5-flash',
+      model: modelToUse,
       contents: [
         {
           inlineData: {
@@ -118,7 +119,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({
       success: true,
       filename: file.name,
-      motor_usado: '🤖 Google Gemini AI Vision API (Next.js & Vercel)',
+      motor_usado: `🤖 Google Gemini AI (${modelToUse})`,
       guardado_en_supabase: guardadoEnSupabase,
       raw_text: rawText,
       fields,
