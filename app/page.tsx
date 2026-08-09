@@ -18,7 +18,10 @@ import {
   FileCheck2,
   Store,
   Sparkles,
-  Layers
+  Layers,
+  Trash2,
+  CheckSquare,
+  Square
 } from 'lucide-react';
 
 interface ProductoItem {
@@ -60,6 +63,8 @@ export default function MinimarketPOSPage() {
   const [xmlContent, setXmlContent] = useState<string>('');
 
   const [history, setHistory] = useState<SupabaseInvoice[]>([]);
+  const [selectedInvoiceIds, setSelectedInvoiceIds] = useState<string[]>([]);
+  const [isDeleting, setIsDeleting] = useState<boolean>(false);
   const [isDbConnected, setIsDbConnected] = useState<boolean>(false);
 
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' | 'warning' } | null>(null);
@@ -138,51 +143,6 @@ export default function MinimarketPOSPage() {
     }
   };
 
-  const loadSampleInvoice = () => {
-    const canvas = document.createElement('canvas');
-    canvas.width = 800;
-    canvas.height = 1050;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
-
-    ctx.fillStyle = '#ffffff';
-    ctx.fillRect(0, 0, 800, 1050);
-    ctx.fillStyle = '#001D39';
-    ctx.font = '22px monospace';
-
-    const lineas = [
-      'DISTRIBUIDORA ALIMENTOS Y BEBIDAS S.A.S.',
-      'NIT: 900.876.543-1',
-      'Factura de Venta No. FE-00892',
-      'Fecha: 15/10/2025',
-      '-----------------------------------------',
-      'CANT  DESCRIPCION             VALOR',
-      ' 10   Cajas Leche Entera 1L   $450,000',
-      '  5   Sacos Arroz 5kg         $180,000',
-      '  2   Cajas Gaseosas 1.5L     $170,000',
-      '-----------------------------------------',
-      'SUBTOTAL: $800,000',
-      'IVA (19%): $152,000',
-      'TOTAL: $952,000',
-      '-----------------------------------------',
-      '¡GRACIAS POR SU COMPRA!'
-    ];
-
-    let y = 70;
-    lineas.forEach(l => {
-      ctx.fillText(l, 50, y);
-      y += 42;
-    });
-
-    canvas.toBlob((blob) => {
-      if (!blob) return;
-      const sampleFile = new File([blob], 'factura_ejemplo_minimarket.png', { type: 'image/png' });
-      setSelectedFile(sampleFile);
-      setPreviewUrl(canvas.toDataURL());
-      processInvoice(sampleFile);
-    });
-  };
-
   const copyXmlToClipboard = () => {
     if (!xmlContent) return;
     navigator.clipboard.writeText(xmlContent);
@@ -202,6 +162,52 @@ export default function MinimarketPOSPage() {
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
     showToast('Archivo XML descargado correctamente', 'success');
+  };
+
+  // Multi-select handlers
+  const handleToggleSelect = (id: string) => {
+    setSelectedInvoiceIds(prev =>
+      prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]
+    );
+  };
+
+  const handleSelectAll = () => {
+    if (selectedInvoiceIds.length === history.length) {
+      setSelectedInvoiceIds([]);
+    } else {
+      setSelectedInvoiceIds(history.map(item => item.id));
+    }
+  };
+
+  const handleDeleteSelected = async (targetIds?: string[]) => {
+    const idsToDelete = targetIds || selectedInvoiceIds;
+    if (idsToDelete.length === 0) return;
+
+    if (!confirm(`¿Estás seguro de que deseas eliminar ${idsToDelete.length} factura(s)?`)) {
+      return;
+    }
+
+    setIsDeleting(true);
+    try {
+      const res = await fetch('/api/facturas', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ids: idsToDelete }),
+      });
+
+      const result = await res.json();
+      if (!res.ok || !result.success) {
+        throw new Error(result.message || 'Error al eliminar registros.');
+      }
+
+      showToast(result.message || 'Registros eliminados con éxito.', 'success');
+      setSelectedInvoiceIds(prev => prev.filter(id => !idsToDelete.includes(id)));
+      loadHistory();
+    } catch (err: any) {
+      showToast(err.message || 'Error al eliminar facturas', 'error');
+    } finally {
+      setIsDeleting(false);
+    }
   };
 
   return (
@@ -460,62 +466,120 @@ export default function MinimarketPOSPage() {
         </section>
       </div>
 
-      {/* History Section */}
+      {/* History Section with Multi-select and Delete */}
       <section className="bg-white border border-[#BDD8E9] rounded-2xl p-6 shadow-md space-y-4">
-        <div className="flex justify-between items-center border-b border-[#EAF2F8] pb-3">
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 border-b border-[#EAF2F8] pb-3">
           <div>
             <h2 className="text-base font-extrabold text-[#001D39]">
               Historial de Compras
             </h2>
             <p className="text-xs text-[#49769F]">Registro de facturas procesadas y guardadas</p>
           </div>
-          <button
-            onClick={loadHistory}
-            className="bg-[#EAF2F8] hover:bg-[#BDD8E9] border border-[#BDD8E9] text-[#001D39] font-bold px-3.5 py-1.5 rounded-xl text-xs flex items-center gap-1.5 transition-all"
-          >
-            <RefreshCw className="w-3.5 h-3.5 text-[#0A4174]" />
-            <span>Actualizar</span>
-          </button>
+          
+          <div className="flex flex-wrap items-center gap-2">
+            {selectedInvoiceIds.length > 0 && (
+              <button
+                onClick={() => handleDeleteSelected()}
+                disabled={isDeleting}
+                className="bg-red-600 hover:bg-red-700 text-white font-bold px-3.5 py-1.5 rounded-xl text-xs flex items-center gap-1.5 transition-all shadow"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                <span>Eliminar Seleccionados ({selectedInvoiceIds.length})</span>
+              </button>
+            )}
+
+            <button
+              onClick={loadHistory}
+              className="bg-[#EAF2F8] hover:bg-[#BDD8E9] border border-[#BDD8E9] text-[#001D39] font-bold px-3.5 py-1.5 rounded-xl text-xs flex items-center gap-1.5 transition-all"
+            >
+              <RefreshCw className="w-3.5 h-3.5 text-[#0A4174]" />
+              <span>Actualizar</span>
+            </button>
+          </div>
         </div>
 
         <div className="overflow-x-auto">
           <table className="w-full text-left text-xs border-collapse">
             <thead>
               <tr className="bg-[#001D39] text-[#BDD8E9] uppercase font-bold text-[11px]">
-                <th className="p-3 rounded-l-lg">Fecha</th>
+                <th className="p-3 rounded-l-lg w-10 text-center">
+                  <button
+                    onClick={handleSelectAll}
+                    title="Seleccionar todo"
+                    className="focus:outline-none"
+                  >
+                    {history.length > 0 && selectedInvoiceIds.length === history.length ? (
+                      <CheckSquare className="w-4 h-4 text-[#7BBDE8]" />
+                    ) : (
+                      <Square className="w-4 h-4 text-[#BDD8E9]/60 hover:text-white" />
+                    )}
+                  </button>
+                </th>
+                <th className="p-3">Fecha</th>
                 <th className="p-3">Proveedor (NIT)</th>
                 <th className="p-3">Subtotal</th>
                 <th className="p-3">IVA</th>
                 <th className="p-3">TOTAL</th>
-                <th className="p-3 text-right rounded-r-lg">Acción</th>
+                <th className="p-3 text-right rounded-r-lg">Acciones</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-[#BDD8E9]/50">
               {history.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="p-6 text-center text-[#49769F]">
+                  <td colSpan={7} className="p-6 text-center text-[#49769F]">
                     Aún no hay compras registradas.
                   </td>
                 </tr>
               ) : (
-                history.map((item) => (
-                  <tr key={item.id} className="hover:bg-[#EAF2F8]/60 transition-colors">
-                    <td className="p-3 font-semibold text-[#001D39]">{item.fecha}</td>
-                    <td className="p-3 font-extrabold text-[#0A4174]">{item.nit}</td>
-                    <td className="p-3 text-[#49769F] font-semibold">${item.subtotal}</td>
-                    <td className="p-3 text-[#49769F] font-semibold">${item.iva}</td>
-                    <td className="p-3 font-black text-[#001D39]">${item.total}</td>
-                    <td className="p-3 text-right">
-                      <button
-                        onClick={() => downloadXmlFile(item.xml_content, `factura_${item.nit}.xml`)}
-                        className="bg-[#001D39] hover:bg-[#0A4174] text-white px-3 py-1 rounded-lg text-xs font-bold inline-flex items-center gap-1 transition-all shadow-sm"
-                      >
-                        <Download className="w-3 h-3 text-[#7BBDE8]" />
-                        <span>XML</span>
-                      </button>
-                    </td>
-                  </tr>
-                ))
+                history.map((item) => {
+                  const isSelected = selectedInvoiceIds.includes(item.id);
+                  return (
+                    <tr
+                      key={item.id}
+                      className={`transition-colors ${
+                        isSelected ? 'bg-[#EAF2F8]' : 'hover:bg-[#EAF2F8]/60'
+                      }`}
+                    >
+                      <td className="p-3 text-center">
+                        <button
+                          onClick={() => handleToggleSelect(item.id)}
+                          className="focus:outline-none"
+                        >
+                          {isSelected ? (
+                            <CheckSquare className="w-4 h-4 text-[#0A4174]" />
+                          ) : (
+                            <Square className="w-4 h-4 text-[#49769F]/50 hover:text-[#0A4174]" />
+                          )}
+                        </button>
+                      </td>
+                      <td className="p-3 font-semibold text-[#001D39]">{item.fecha}</td>
+                      <td className="p-3 font-extrabold text-[#0A4174]">{item.nit}</td>
+                      <td className="p-3 text-[#49769F] font-semibold">${item.subtotal}</td>
+                      <td className="p-3 text-[#49769F] font-semibold">${item.iva}</td>
+                      <td className="p-3 font-black text-[#001D39]">${item.total}</td>
+                      <td className="p-3 text-right">
+                        <div className="flex items-center justify-end gap-1.5">
+                          <button
+                            onClick={() => downloadXmlFile(item.xml_content, `factura_${item.nit}.xml`)}
+                            className="bg-[#001D39] hover:bg-[#0A4174] text-white px-2.5 py-1 rounded-lg text-xs font-bold inline-flex items-center gap-1 transition-all shadow-sm"
+                            title="Descargar XML"
+                          >
+                            <Download className="w-3 h-3 text-[#7BBDE8]" />
+                            <span>XML</span>
+                          </button>
+                          
+                          <button
+                            onClick={() => handleDeleteSelected([item.id])}
+                            className="bg-red-100 hover:bg-red-200 text-red-700 p-1.5 rounded-lg transition-all"
+                            title="Eliminar factura"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })
               )}
             </tbody>
           </table>

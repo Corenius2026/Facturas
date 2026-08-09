@@ -1,4 +1,4 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { getSupabaseClient } from '@/lib/supabase';
 
 export async function GET() {
@@ -17,7 +17,7 @@ export async function GET() {
       .from('facturas')
       .select('*')
       .order('creado_en', { ascending: false })
-      .limit(50);
+      .limit(100);
 
     if (error) {
       throw error;
@@ -35,5 +35,47 @@ export async function GET() {
       error: error.message,
       facturas: []
     });
+  }
+}
+
+export async function DELETE(req: NextRequest) {
+  const supabase = getSupabaseClient();
+  if (!supabase) {
+    return NextResponse.json({
+      success: false,
+      message: 'Supabase no está configurado.'
+    }, { status: 400 });
+  }
+
+  try {
+    const body = await req.json();
+    const ids: string[] = body.ids || [];
+
+    if (!Array.isArray(ids) || ids.length === 0) {
+      return NextResponse.json({
+        success: false,
+        message: 'No se enviaron IDs válidos para eliminar.'
+      }, { status: 400 });
+    }
+
+    const { error } = await supabase
+      .from('facturas')
+      .delete()
+      .in('id', ids);
+
+    if (error) {
+      throw error;
+    }
+
+    return NextResponse.json({
+      success: true,
+      count: ids.length,
+      message: `${ids.length} registro(s) eliminado(s) correctamente.`
+    });
+  } catch (error: any) {
+    return NextResponse.json({
+      success: false,
+      message: error.message || 'Error al eliminar registros en Supabase.'
+    }, { status: 500 });
   }
 }
