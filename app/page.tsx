@@ -19,7 +19,8 @@ import {
   Square,
   Camera,
   TrendingUp,
-  Receipt
+  Receipt,
+  Package
 } from 'lucide-react';
 
 interface ProductoItem {
