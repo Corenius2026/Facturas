@@ -159,7 +159,7 @@ def generar_xml_string(datos: dict) -> str:
 # ==============================================================================
 # ENDPOINTS API
 # ==============================================================================
-@app.get("/", response_class=HTMLResponse)
+@app.api_route("/", methods=["GET", "HEAD"], response_class=HTMLResponse)
 def index():
     """Sirve la interfaz web HTML."""
     path_index = os.path.join(DIR_STATIC, "index.html")
