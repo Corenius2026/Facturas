@@ -56,6 +56,7 @@ interface SupabaseInvoice {
 
 export default function MinimarketPOSPage() {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [buyerNit, setBuyerNit] = useState<string>('');
   const [previewUrl, setPreviewUrl] = useState<string>('');
   const [isProcessing, setIsProcessing] = useState<boolean>(false);
   const [activeTab, setActiveTab] = useState<'image' | 'text'>('image');
@@ -122,6 +123,9 @@ export default function MinimarketPOSPage() {
     setIsProcessing(true);
     const formData = new FormData();
     formData.append('file', targetFile);
+    if (buyerNit.trim()) {
+      formData.append('buyer_nit', buyerNit.trim());
+    }
 
     try {
       const res = await fetch('/api/procesar', {
@@ -356,6 +360,19 @@ export default function MinimarketPOSPage() {
                   <span>{selectedFile.name}</span>
                 </div>
               )}
+            </div>
+
+            <div className="bg-[#EAF2F8]/60 border border-[#BDD8E9] rounded-xl p-3.5 space-y-1">
+              <label className="block text-[11px] font-bold text-[#001D39] uppercase">
+                Tu NIT de Empresa en Siigo (Opcional):
+              </label>
+              <input
+                type="text"
+                value={buyerNit}
+                onChange={(e) => setBuyerNit(e.target.value)}
+                placeholder="Ej. 901234567 (Para matchear con tu cuenta Siigo)"
+                className="w-full bg-white border border-[#BDD8E9] rounded-lg px-3 py-1.5 text-xs text-[#001D39] font-medium focus:outline-none focus:border-[#0A4174]"
+              />
             </div>
           </div>
 

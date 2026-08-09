@@ -12,6 +12,7 @@ interface ProductoItem {
 
 interface FacturaDatos {
   NIT: string;
+  BuyerNIT?: string;
   Fecha: string;
   Subtotal: string;
   IVA: string;
@@ -29,6 +30,9 @@ function limpiarValorNumerico(strVal: string): number {
 function generarXmlInvoiceUbl21(datos: FacturaDatos): { invoiceXml: string; attachedXml: string } {
   const nitProvRaw = (datos.NIT || '900000000').replace(/[^0-9]/g, '');
   const nitProv = nitProvRaw || '900000000';
+  const buyerNitRaw = (datos.BuyerNIT || '900123456').replace(/[^0-9]/g, '');
+  const buyerNit = buyerNitRaw || '900123456';
+
   const fecha = datos.Fecha || new Date().toISOString().split('T')[0];
   const numFactura = `FE-${Math.floor(10000 + Math.random() * 90000)}`;
 
@@ -86,7 +90,7 @@ function generarXmlInvoiceUbl21(datos: FacturaDatos): { invoiceXml: string; atta
     <cac:Party>
       <cac:PartyTaxScheme>
         <cbc:RegistrationName>MINIMARKET POS</cbc:RegistrationName>
-        <cbc:CompanyID schemeID="4" schemeName="31">900123456</cbc:CompanyID>
+        <cbc:CompanyID schemeID="4" schemeName="31">${buyerNit}</cbc:CompanyID>
         <cac:TaxScheme>
           <cbc:ID>01</cbc:ID>
           <cbc:Name>IVA</cbc:Name>
@@ -135,7 +139,7 @@ ${productosXmlLines}
   <cac:ReceiverParty>
     <cac:PartyTaxScheme>
       <cbc:RegistrationName>MINIMARKET POS</cbc:RegistrationName>
-      <cbc:CompanyID schemeID="4" schemeName="31">900123456</cbc:CompanyID>
+      <cbc:CompanyID schemeID="4" schemeName="31">${buyerNit}</cbc:CompanyID>
     </cac:PartyTaxScheme>
   </cac:ReceiverParty>
   <cac:Attachment>
@@ -154,9 +158,9 @@ async function generarZipParaSiigo(invoiceXml: string, attachedXml: string, nit:
   const zip = new JSZip();
   const nitLimpio = (nit || '900000000').replace(/[^0-9]/g, '');
   
-  // Archivo XML principal de la factura
+  // Nombres de archivos estándar requeridos por el validador de Siigo
   zip.file(`zfv${nitLimpio}0002500000001.xml`, attachedXml);
-  zip.file(`Invoice_${nitLimpio}.xml`, invoiceXml);
+  zip.file(`fv${nitLimpio}0002500000001.xml`, invoiceXml);
   
   const zipBuffer = await zip.generateAsync({ type: 'nodebuffer' });
   return zipBuffer.toString('base64');
@@ -168,6 +172,7 @@ export async function POST(req: NextRequest) {
     const file = formData.get('file') as File | null;
     const geminiApiKeyInput = formData.get('gemini_api_key') as string | null;
     const customModelInput = formData.get('gemini_model') as string | null;
+    const buyerNitInput = formData.get('buyer_nit') as string | null;
 
     if (!file) {
       return NextResponse.json({ success: false, detail: 'No se envió ningún archivo de imagen.' }, { status: 400 });
@@ -266,6 +271,7 @@ export async function POST(req: NextRequest) {
 
     const fields: FacturaDatos = {
       NIT: datosJson.NIT || 'N/A',
+      BuyerNIT: buyerNitInput || '900123456',
       Fecha: datosJson.Fecha || 'N/A',
       Subtotal: datosJson.Subtotal || 'N/A',
       IVA: datosJson.IVA || 'N/A',
