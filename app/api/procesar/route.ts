@@ -25,12 +25,12 @@ function limpiarValorNumerico(strVal: string): number {
   return isNaN(num) ? 0 : num;
 }
 
-// Genera un XML UBL 2.1 estandarizado de la DIAN (AttachedDocument) que exige Siigo
-function generarXmlDianUbl21(datos: FacturaDatos): string {
+// Genera la estructura XML de Factura Electrónica UBL 2.1 oficial de la DIAN que exige Siigo
+function generarXmlInvoiceUbl21(datos: FacturaDatos): { invoiceXml: string; attachedXml: string } {
   const nitProvRaw = (datos.NIT || '900000000').replace(/[^0-9]/g, '');
   const nitProv = nitProvRaw || '900000000';
   const fecha = datos.Fecha || new Date().toISOString().split('T')[0];
-  const numFactura = `FE-${Math.floor(1000 + Math.random() * 9000)}`;
+  const numFactura = `FE-${Math.floor(10000 + Math.random() * 90000)}`;
 
   const subtotalNum = limpiarValorNumerico(datos.Subtotal);
   const ivaNum = limpiarValorNumerico(datos.IVA);
@@ -41,20 +41,20 @@ function generarXmlDianUbl21(datos: FacturaDatos): string {
     const totalItemNum = limpiarValorNumerico(p.total_item) || (limpiarValorNumerico(p.precio_unitario) * cantNum);
     const precioUnitNum = limpiarValorNumerico(p.precio_unitario) || (totalItemNum / cantNum);
 
-    return `      <cac:InvoiceLine>
-        <cbc:ID>${index + 1}</cbc:ID>
-        <cbc:InvoicedQuantity unitCode="EA">${cantNum.toFixed(2)}</cbc:InvoicedQuantity>
-        <cbc:LineExtensionAmount currencyID="COP">${totalItemNum.toFixed(2)}</cbc:LineExtensionAmount>
-        <cac:Item>
-          <cbc:Description><![CDATA[${p.descripcion || 'Producto'}]]></cbc:Description>
-        </cac:Item>
-        <cac:Price>
-          <cbc:PriceAmount currencyID="COP">${precioUnitNum.toFixed(2)}</cbc:PriceAmount>
-        </cac:Price>
-      </cac:InvoiceLine>`;
+    return `  <cac:InvoiceLine>
+    <cbc:ID>${index + 1}</cbc:ID>
+    <cbc:InvoicedQuantity unitCode="EA">${cantNum.toFixed(2)}</cbc:InvoicedQuantity>
+    <cbc:LineExtensionAmount currencyID="COP">${totalItemNum.toFixed(2)}</cbc:LineExtensionAmount>
+    <cac:Item>
+      <cbc:Description><![CDATA[${p.descripcion || 'Producto'}]]></cbc:Description>
+    </cac:Item>
+    <cac:Price>
+      <cbc:PriceAmount currencyID="COP">${precioUnitNum.toFixed(2)}</cbc:PriceAmount>
+    </cac:Price>
+  </cac:InvoiceLine>`;
   }).join('\n');
 
-  const invoiceInnerXml = `<?xml version="1.0" encoding="UTF-8"?>
+  const invoiceXml = `<?xml version="1.0" encoding="UTF-8"?>
 <Invoice xmlns="urn:oasis:names:specification:ubl:schema:xsd:Invoice-2"
          xmlns:cac="urn:oasis:names:specification:ubl:schema:xsd:CommonAggregateComponents-2"
          xmlns:cbc="urn:oasis:names:specification:ubl:schema:xsd:CommonBasicComponents-2">
@@ -117,7 +117,7 @@ function generarXmlDianUbl21(datos: FacturaDatos): string {
 ${productosXmlLines}
 </Invoice>`;
 
-  return `<?xml version="1.0" encoding="UTF-8"?>
+  const attachedXml = `<?xml version="1.0" encoding="UTF-8"?>
 <AttachedDocument xmlns="urn:oasis:names:specification:ubl:schema:xsd:AttachedDocument-2"
                   xmlns:cac="urn:oasis:names:specification:ubl:schema:xsd:CommonAggregateComponents-2"
                   xmlns:cbc="urn:oasis:names:specification:ubl:schema:xsd:CommonBasicComponents-2">
@@ -142,17 +142,22 @@ ${productosXmlLines}
     <cac:ExternalReference>
       <cbc:MimeCode>text/xml</cbc:MimeCode>
       <cbc:EncodingCode>UTF-8</cbc:EncodingCode>
-      <cbc:Description><![CDATA[${invoiceInnerXml}]]></cbc:Description>
+      <cbc:Description><![CDATA[${invoiceXml}]]></cbc:Description>
     </cac:ExternalReference>
   </cac:Attachment>
 </AttachedDocument>`;
+
+  return { invoiceXml, attachedXml };
 }
 
-async function generarZipParaSiigo(xmlContent: string, nit: string): Promise<string> {
+async function generarZipParaSiigo(invoiceXml: string, attachedXml: string, nit: string): Promise<string> {
   const zip = new JSZip();
   const nitLimpio = (nit || '900000000').replace(/[^0-9]/g, '');
-  const xmlFilename = `zfv${nitLimpio}0002500000001.xml`;
-  zip.file(xmlFilename, xmlContent);
+  
+  // Archivo XML principal de la factura
+  zip.file(`zfv${nitLimpio}0002500000001.xml`, attachedXml);
+  zip.file(`Invoice_${nitLimpio}.xml`, invoiceXml);
+  
   const zipBuffer = await zip.generateAsync({ type: 'nodebuffer' });
   return zipBuffer.toString('base64');
 }
@@ -268,8 +273,8 @@ export async function POST(req: NextRequest) {
       Productos: datosJson.Productos || [],
     };
 
-    const xmlContent = generarXmlDianUbl21(fields);
-    const zipBase64 = await generarZipParaSiigo(xmlContent, fields.NIT);
+    const { invoiceXml, attachedXml } = generarXmlInvoiceUbl21(fields);
+    const zipBase64 = await generarZipParaSiigo(invoiceXml, attachedXml, fields.NIT);
     const rawText = datosJson.TextoExtraido || `[Analizado exitosamente con la API de Google Gemini (${modelUsed})]`;
 
     // Guardar en Supabase si está disponible
@@ -284,7 +289,7 @@ export async function POST(req: NextRequest) {
           iva: fields.IVA,
           total: fields.Total,
           texto_extraido: rawText,
-          xml_content: xmlContent,
+          xml_content: attachedXml,
         });
         guardadoEnSupabase = true;
       } catch (errDb) {
@@ -303,7 +308,8 @@ export async function POST(req: NextRequest) {
       fields,
       productos: fields.Productos,
       imagen_original_b64: imageOriginalB64,
-      xml_content: xmlContent,
+      xml_content: attachedXml,
+      invoice_xml_content: invoiceXml,
       zip_b64: zipBase64,
     });
 

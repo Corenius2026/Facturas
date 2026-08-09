@@ -25,6 +25,7 @@ import {
   FileSpreadsheet,
   FileArchive
 } from 'lucide-react';
+import JSZip from 'jszip';
 
 interface ProductoItem {
   cantidad: string;
@@ -63,6 +64,7 @@ export default function MinimarketPOSPage() {
   const [productos, setProductos] = useState<ProductoItem[]>([]);
   const [rawText, setRawText] = useState<string>('');
   const [xmlContent, setXmlContent] = useState<string>('');
+  const [invoiceXmlContent, setInvoiceXmlContent] = useState<string>('');
   const [zipB64, setZipB64] = useState<string>('');
 
   const [history, setHistory] = useState<SupabaseInvoice[]>([]);
@@ -137,9 +139,10 @@ export default function MinimarketPOSPage() {
       setProductos(result.productos || result.fields?.Productos || []);
       setRawText(result.raw_text);
       setXmlContent(result.xml_content);
+      setInvoiceXmlContent(result.invoice_xml_content || '');
       setZipB64(result.zip_b64 || '');
 
-      showToast('¡Factura analizada e integrada exitosamente!', 'success');
+      showToast('¡Factura analizada e integrada para Siigo!', 'success');
       loadHistory();
     } catch (err: any) {
       showToast(err.message || 'Error en el procesamiento de la factura', 'error');
@@ -169,27 +172,46 @@ export default function MinimarketPOSPage() {
     showToast('Archivo XML UBL 2.1 descargado', 'success');
   };
 
-  const downloadSiigoZipFile = () => {
-    if (!zipB64) {
-      showToast('Generando paquete ZIP...', 'warning');
+  const downloadSiigoZipFile = async () => {
+    if (!fields || !xmlContent) {
+      showToast('No hay factura procesada para descargar.', 'warning');
       return;
     }
-    const byteCharacters = atob(zipB64);
-    const byteNumbers = new Array(byteCharacters.length);
-    for (let i = 0; i < byteCharacters.length; i++) {
-      byteNumbers[i] = byteCharacters.charCodeAt(i);
+
+    try {
+      let zipBase64ToUse = zipB64;
+
+      if (!zipBase64ToUse) {
+        const zip = new JSZip();
+        const nitLimpio = (fields.NIT || '900000000').replace(/[^0-9]/g, '');
+        zip.file(`zfv${nitLimpio}0002500000001.xml`, xmlContent);
+        if (invoiceXmlContent) {
+          zip.file(`Invoice_${nitLimpio}.xml`, invoiceXmlContent);
+        }
+        zipBase64ToUse = await zip.generateAsync({ type: 'base64' });
+      }
+
+      const byteCharacters = atob(zipBase64ToUse);
+      const byteNumbers = new Array(byteCharacters.length);
+      for (let i = 0; i < byteCharacters.length; i++) {
+        byteNumbers[i] = byteCharacters.charCodeAt(i);
+      }
+      const byteArray = new Uint8Array(byteNumbers);
+      const blob = new Blob([byteArray], { type: 'application/zip' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      const nitFilename = (fields.NIT || 'proveedor').replace(/[^0-9a-zA-Z]/g, '');
+      a.download = `factura_compra_siigo_${nitFilename}.zip`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      showToast('¡Archivo .ZIP generado y descargado para Siigo!', 'success');
+    } catch (err: any) {
+      console.error('Error al empaquetar ZIP:', err);
+      showToast('Error al generar el archivo .ZIP', 'error');
     }
-    const byteArray = new Uint8Array(byteNumbers);
-    const blob = new Blob([byteArray], { type: 'application/zip' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `factura_compra_siigo_${fields?.NIT || 'prov'}.zip`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-    showToast('Paquete .ZIP para Siigo descargado exitosamente', 'success');
   };
 
   const downloadSiigoCsvFile = () => {
@@ -261,7 +283,7 @@ export default function MinimarketPOSPage() {
       loadHistory();
     } catch (err: any) {
       showToast(err.message || 'Error al eliminar facturas', 'error');
-    } finally {
+    } fontally {
       setIsDeleting(false);
     }
   };
@@ -344,7 +366,7 @@ export default function MinimarketPOSPage() {
               className="w-full bg-[#001D39] hover:bg-[#0A4174] disabled:opacity-40 disabled:cursor-not-allowed text-white font-bold py-3.5 px-4 rounded-xl shadow-md hover:shadow-lg transition-all flex items-center justify-center gap-2 text-sm"
             >
               <Sparkles className="w-4 h-4 text-[#7BBDE8]" />
-              <span>{isProcessing ? 'Procesando Documento...' : 'Procesar Factura para Siigo'}</span>
+              <span>{isProcessing ? 'Procesando Documento...' : 'Procesar Factura'}</span>
             </button>
           </div>
         </section>
@@ -356,7 +378,7 @@ export default function MinimarketPOSPage() {
             <div className="absolute inset-0 bg-[#001D39]/85 backdrop-blur-sm border border-[#49769F] rounded-2xl z-40 flex flex-col items-center justify-center gap-4 text-white shadow-2xl">
               <div className="w-14 h-14 border-4 border-[#BDD8E9]/30 border-t-[#7BBDE8] rounded-full animate-spin flex items-center justify-center">
               </div>
-              <h3 className="font-bold text-base">Extrayendo Datos y Generando Paquete Siigo...</h3>
+              <h3 className="font-bold text-base">Extrayendo Datos y Generando Paquete .ZIP...</h3>
               <p className="text-xs text-[#BDD8E9]">Analizando automáticamente encabezados, productos e integrando formato UBL 2.1...</p>
             </div>
           )}
@@ -370,30 +392,30 @@ export default function MinimarketPOSPage() {
           ) : (
             <>
               {/* Export Buttons Bar for Siigo */}
-              <div className="bg-gradient-to-r from-[#001D39] to-[#0A4174] border border-[#49769F]/40 rounded-2xl p-4 shadow-md text-white flex flex-col sm:flex-row items-center justify-between gap-3">
-                <div className="flex items-center gap-3">
+              <div className="bg-gradient-to-r from-[#001D39] to-[#0A4174] border border-[#49769F]/40 rounded-2xl p-5 shadow-lg text-white space-y-3">
+                <div className="flex items-center gap-3 border-b border-white/10 pb-3">
                   <FileArchive className="w-6 h-6 text-[#7BBDE8]" />
                   <div>
-                    <h3 className="font-bold text-sm">Archivos de Importación para Siigo</h3>
-                    <p className="text-[11px] text-[#BDD8E9]">Generado en formato DIAN UBL 2.1 y plantilla de compra</p>
+                    <h3 className="font-bold text-sm">Archivos para Carga en Siigo Nube</h3>
+                    <p className="text-[11px] text-[#BDD8E9]">Selecciona la opción requerida según tu módulo de Siigo</p>
                   </div>
                 </div>
 
-                <div className="flex flex-wrap gap-2 w-full sm:w-auto">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
                   <button
                     onClick={downloadSiigoZipFile}
-                    className="flex-1 sm:flex-initial bg-[#7BBDE8] hover:bg-[#6EA2B3] text-[#001D39] font-extrabold px-3.5 py-2 rounded-xl text-xs flex items-center justify-center gap-1.5 shadow transition-all"
+                    className="w-full bg-[#7BBDE8] hover:bg-[#6EA2B3] text-[#001D39] font-extrabold py-3 px-4 rounded-xl text-xs flex items-center justify-center gap-2 shadow-md transition-all"
                   >
                     <FileArchive className="w-4 h-4" />
-                    <span>Descargar Paquete .ZIP (Siigo)</span>
+                    <span>📦 Descargar Paquete .ZIP (Siigo)</span>
                   </button>
 
                   <button
                     onClick={downloadSiigoCsvFile}
-                    className="flex-1 sm:flex-initial bg-white/10 hover:bg-white/20 text-white font-bold px-3 py-2 rounded-xl text-xs flex items-center justify-center gap-1.5 border border-white/20 transition-all"
+                    className="w-full bg-white/10 hover:bg-white/20 text-white font-bold py-3 px-4 rounded-xl text-xs flex items-center justify-center gap-2 border border-white/20 transition-all"
                   >
                     <FileSpreadsheet className="w-4 h-4 text-[#7BBDE8]" />
-                    <span>Plantilla CSV</span>
+                    <span>📊 Plantilla CSV (Compras Masivas)</span>
                   </button>
                 </div>
               </div>
