@@ -1,47 +1,71 @@
-# 🛒 Minimarket Invoice AI - Google Gemini & Vercel Edition
+# 🛒 Minimarket POS AI - Next.js 14 + React + Supabase + Google Gemini AI
 
-Procesador de facturas físicas a XML utilizando **Google Gemini AI Vision API** (`gemini-2.5-flash`) y diseñado para despliegue instantáneo en **Vercel Serverless**.
+Sistema Fullstack inteligente de lectura de facturas de compras para minimarkets. Desarrollado en **Next.js 14 (App Router)**, **React**, **TailwindCSS**, **Supabase** y la API oficial de **Google Gemini AI Vision** (`gemini-2.5-flash`).
 
 ---
 
 ## ✨ Características Principales
 
-- **🤖 Visión por Inteligencia Artificial:** Utiliza la API oficial de Google Gemini 2.5 Flash para analizar facturas de proveedores de alimentos, abarrotes y bebidas con un 99% de precisión.
-- **⚡ Despliegue Instantáneo en Vercel:** Sin servidores pesados, sin Docker y sin dependencias de programas del sistema operativo (Cero Tesseract).
-- **🏪 Interfaz Tematizada para Minimarkets:** Diseño moderno (modo oscuro con tonos verde esmeralda y dorado).
-- **📄 Generación de Archivos XML:** Crea automáticamente archivos `.xml` jerárquicos e indentados listos para integrarse con sistemas de inventario y contabilidad.
+- **⚛️ Arquitectura Fullstack Next.js 14:** React + TypeScript + App Router con API Routes protegidas en el servidor.
+- **🤖 Visión por Inteligencia Artificial:** Análisis de imágenes con el SDK oficial `@google/genai` (Google Gemini 2.5 Flash).
+- **🗄️ Persistencia de Datos con Supabase:** Registra automáticamente el historial de facturas procesadas (`NIT`, `Fecha`, `Subtotal`, `IVA`, `Total`, `XML`) en PostgreSQL.
+- **🎨 Interfaz POS de Minimarket:** Maquetación comercial en modo oscuro con **TailwindCSS**, iconos **Lucide** e indicadores interactivos.
+- **⚡ Despliegue Nativo en Vercel:** Despliegue automático en 1 solo clic en Vercel con respuesta instantánea global.
+
+---
+
+## 🛠️ Variables de Entorno Recomendadas (en Vercel)
+
+| Variable | Descripción |
+| :--- | :--- |
+| `GEMINI_API_KEY` | Clave de API de [Google AI Studio](https://aistudio.google.com/app/apikey) |
+| `NEXT_PUBLIC_SUPABASE_URL` | URL de tu proyecto en Supabase |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | API Key pública (Anon Key) de tu proyecto en Supabase |
 
 ---
 
 ## 🚀 Despliegue en Vercel en 1 Clic
 
-1. Crea una cuenta en [Vercel.com](https://vercel.com).
-2. Haz clic en **"Add New..." ➔ "Project"**.
-3. Importa este repositorio de GitHub: `Corenius2026/Facturas`.
-4. *(Opcional)* Agrega la variable de entorno `GEMINI_API_KEY` con tu clave de [Google AI Studio](https://aistudio.google.com/app/apikey).
-5. Haz clic en **"Deploy"**.
-
-¡Tu aplicación estará en línea e instantánea en menos de 10 segundos!
+1. Sube tu proyecto a GitHub.
+2. Ingresa a **[Vercel.com](https://vercel.com)**.
+3. Importa este repositorio (`Corenius2026/Facturas`).
+4. Configura tus Variables de Entorno en el panel de Vercel.
+5. Haz clic en **Deploy**.
 
 ---
 
-## 🔑 Clave de API de Google Gemini
+## 🗄️ Esquema de Base de Datos para Supabase (`supabase_schema.sql`)
 
-Puedes obtener una clave de API gratuita en 30 segundos visitando **[Google AI Studio](https://aistudio.google.com/app/apikey)**. La clave se puede pegar directamente en la pantalla de la aplicación web o guardarla como variable de entorno `GEMINI_API_KEY` en tu panel de Vercel.
+Ejecuta el siguiente código en el **SQL Editor** de Supabase para inicializar la tabla de facturas:
+
+```sql
+CREATE TABLE IF NOT EXISTS facturas (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    nit VARCHAR(50) NOT NULL DEFAULT 'N/A',
+    fecha VARCHAR(50) NOT NULL DEFAULT 'N/A',
+    subtotal VARCHAR(50) DEFAULT 'N/A',
+    iva VARCHAR(50) DEFAULT 'N/A',
+    total VARCHAR(50) DEFAULT 'N/A',
+    texto_extraido TEXT,
+    xml_content TEXT NOT NULL,
+    creado_en TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+ALTER TABLE facturas ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Permitir lectura publica de facturas" ON facturas FOR SELECT USING (true);
+CREATE POLICY "Permitir insercion publica de facturas" ON facturas FOR INSERT WITH CHECK (true);
+```
 
 ---
 
-## 📁 Estructura del Proyecto
+## 💻 Desarrollo Local
 
+```bash
+# 1. Instalar dependencias
+npm install
+
+# 2. Iniciar servidor de desarrollo Next.js
+npm run dev
 ```
-Facturas/
-├── api/
-│   └── index.py            # Servidor FastAPI Serverless (Google Gemini API)
-├── static/
-│   ├── index.html          # Interfaz web Minimarket
-│   ├── styles.css          # Estilos CSS
-│   └── app.js              # Cliente JS para llamadas API
-├── vercel.json             # Configuración de rutas para Vercel
-├── requirements.txt        # Dependencias ligeras de Python
-└── README.md
-```
+
+Abre [http://localhost:3000](http://localhost:3000) en tu navegador.

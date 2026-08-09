@@ -1,0 +1,40 @@
+@import 'tailwindcss/base';
+@import 'tailwindcss/components';
+@import 'tailwindcss/utilities';
+
+@layer base {
+  body {
+    @apply bg-[#090d16] text-slate-100 font-sans min-h-screen relative overflow-x-hidden antialiased;
+  }
+}
+
+.blob {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(100px);
+  opacity: 0.15;
+}
+
+.blob-1 {
+  top: -10%;
+  left: -10%;
+  width: 500px;
+  height: 500px;
+  background: #10b981;
+}
+
+.blob-2 {
+  bottom: -10%;
+  right: -10%;
+  width: 550px;
+  height: 550px;
+  background: #f59e0b;
+}
+
+@keyframes spin-fast {
+  to { transform: rotate(360deg); }
+}
+
+.animate-spin-fast {
+  animation: spin-fast 0.8s linear infinite;
+}
