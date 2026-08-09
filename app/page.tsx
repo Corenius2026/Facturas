@@ -5,7 +5,6 @@ import {
   Building2,
   UploadCloud,
   FileText,
-  Database,
   Calendar,
   Package,
   Tag,
@@ -19,8 +18,7 @@ import {
   FileCheck2,
   Store,
   Sparkles,
-  Layers,
-  ArrowRight
+  Layers
 } from 'lucide-react';
 
 interface ProductoItem {
@@ -60,7 +58,6 @@ export default function MinimarketPOSPage() {
   const [productos, setProductos] = useState<ProductoItem[]>([]);
   const [rawText, setRawText] = useState<string>('');
   const [xmlContent, setXmlContent] = useState<string>('');
-  const [engineUsed, setEngineUsed] = useState<string>('');
 
   const [history, setHistory] = useState<SupabaseInvoice[]>([]);
   const [isDbConnected, setIsDbConnected] = useState<boolean>(false);
@@ -131,7 +128,6 @@ export default function MinimarketPOSPage() {
       setProductos(result.productos || result.fields?.Productos || []);
       setRawText(result.raw_text);
       setXmlContent(result.xml_content);
-      setEngineUsed(result.motor_usado);
 
       showToast('Factura analizada e integrada exitosamente', 'success');
       loadHistory();
@@ -224,30 +220,17 @@ export default function MinimarketPOSPage() {
         </div>
       )}
 
-      {/* Premium Header Banner */}
-      <header className="bg-gradient-to-r from-[#001D39] via-[#0A4174] to-[#001D39] rounded-2xl p-6 sm:p-8 text-white shadow-xl border border-[#49769F]/30 relative overflow-hidden flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
-        <div className="flex items-center gap-5 relative z-10">
+      {/* Clean Premium Header Banner */}
+      <header className="bg-gradient-to-r from-[#001D39] via-[#0A4174] to-[#001D39] rounded-2xl p-6 sm:p-8 text-white shadow-xl border border-[#49769F]/30 flex items-center justify-between">
+        <div className="flex items-center gap-5">
           <div className="w-16 h-16 bg-white/10 backdrop-blur-md border border-white/20 rounded-2xl flex items-center justify-center shadow-inner">
             <Store className="w-8 h-8 text-[#7BBDE8]" />
           </div>
           <div>
-            <div className="flex items-center gap-3">
-              <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-white">
-                Minimarket<span className="text-[#7BBDE8]"> POS</span>
-              </h1>
-              <span className="bg-[#7BBDE8]/20 border border-[#7BBDE8]/40 text-[#BDD8E9] text-xs font-bold px-3 py-1 rounded-full uppercase tracking-wider">
-                Siigo ERP Integration
-              </span>
-            </div>
-            <p className="text-[#BDD8E9] text-xs sm:text-sm mt-1 font-medium">Digitalización Inteligente de Facturas de Proveedores e Inventario</p>
-          </div>
-        </div>
-
-        <div className="flex items-center gap-4 bg-white/10 backdrop-blur-md border border-white/15 px-4 py-2.5 rounded-xl text-xs relative z-10">
-          <div className="w-3 h-3 rounded-full bg-[#7BBDE8] animate-pulse" />
-          <div>
-            <span className="block text-[#BDD8E9] text-[10px] uppercase font-extrabold tracking-wider">Base de Datos</span>
-            <span className="font-bold text-white text-xs">{isDbConnected ? 'Supabase Conectado ✅' : 'Listo para Conexión'}</span>
+            <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-white">
+              Minimarket<span className="text-[#7BBDE8]"> POS</span>
+            </h1>
+            <p className="text-[#BDD8E9] text-xs sm:text-sm mt-1 font-medium">Digitalización de Facturas de Proveedores e Inventario</p>
           </div>
         </div>
       </header>
@@ -262,7 +245,6 @@ export default function MinimarketPOSPage() {
                 <FileCheck2 className="w-5 h-5 text-[#0A4174]" />
                 Factura de Proveedor
               </h2>
-              <span className="text-[11px] font-semibold text-[#49769F] bg-[#EAF2F8] px-2.5 py-0.5 rounded-md">Paso 1</span>
             </div>
 
             <div
@@ -300,7 +282,7 @@ export default function MinimarketPOSPage() {
               className="w-full bg-[#001D39] hover:bg-[#0A4174] disabled:opacity-40 disabled:cursor-not-allowed text-white font-bold py-3.5 px-4 rounded-xl shadow-md hover:shadow-lg transition-all flex items-center justify-center gap-2 text-sm"
             >
               <Sparkles className="w-4 h-4 text-[#7BBDE8]" />
-              <span>{isProcessing ? 'Procesando Documento...' : 'Procesar Factura para Siigo'}</span>
+              <span>{isProcessing ? 'Procesando Documento...' : 'Procesar Factura'}</span>
             </button>
 
             <button
@@ -308,7 +290,7 @@ export default function MinimarketPOSPage() {
               disabled={isProcessing}
               className="w-full bg-[#EAF2F8] hover:bg-[#BDD8E9]/60 text-[#001D39] font-bold py-2.5 px-4 rounded-xl text-xs flex items-center justify-center gap-2 transition-all border border-[#BDD8E9]"
             >
-              🧪 Cargar Factura de Prueba
+              📄 Cargar Factura de Prueba
             </button>
           </div>
         </section>
@@ -320,7 +302,7 @@ export default function MinimarketPOSPage() {
             <div className="absolute inset-0 bg-[#001D39]/85 backdrop-blur-sm border border-[#49769F] rounded-2xl z-40 flex flex-col items-center justify-center gap-4 text-white shadow-2xl">
               <div className="w-14 h-14 border-4 border-[#BDD8E9]/30 border-t-[#7BBDE8] rounded-full animate-spin flex items-center justify-center">
               </div>
-              <h3 className="font-bold text-base">Extrayendo Datos e Ítems para Siigo...</h3>
+              <h3 className="font-bold text-base">Extrayendo Datos de la Factura...</h3>
               <p className="text-xs text-[#BDD8E9]">Analizando automáticamente encabezados y lista de productos...</p>
             </div>
           )}
@@ -329,20 +311,17 @@ export default function MinimarketPOSPage() {
             <div className="bg-white border border-[#BDD8E9] rounded-2xl p-12 text-center text-[#49769F] shadow-md">
               <FileText className="w-14 h-14 mx-auto mb-3 text-[#6EA2B3] opacity-60" />
               <h3 className="text-lg font-bold text-[#001D39] mb-1">Sin Factura Procesada</h3>
-              <p className="text-xs max-w-md mx-auto">Carga la imagen de una factura en el panel izquierdo para visualizar la extracción de productos y estructura XML para Siigo.</p>
+              <p className="text-xs max-w-md mx-auto">Carga la imagen de una factura en el panel izquierdo para visualizar el resumen de la compra y la lista de productos.</p>
             </div>
           ) : (
             <>
               {/* Header Metrics Summary */}
               <div className="bg-white border border-[#BDD8E9] rounded-2xl p-6 shadow-md space-y-4">
-                <div className="flex justify-between items-center border-b border-[#EAF2F8] pb-3">
+                <div className="border-b border-[#EAF2F8] pb-3">
                   <h2 className="text-sm font-extrabold text-[#001D39] uppercase tracking-wider flex items-center gap-2">
                     <Layers className="w-4 h-4 text-[#0A4174]" />
                     Encabezado de Compra
                   </h2>
-                  <span className="text-xs font-bold text-[#0A4174] bg-[#EAF2F8] px-3 py-1 rounded-full border border-[#BDD8E9]">
-                    {engineUsed}
-                  </span>
                 </div>
 
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
@@ -381,10 +360,10 @@ export default function MinimarketPOSPage() {
                 <div className="flex justify-between items-center border-b border-[#EAF2F8] pb-3">
                   <h2 className="text-sm font-extrabold text-[#001D39] flex items-center gap-2 uppercase tracking-wider">
                     <ListOrdered className="w-4 h-4 text-[#0A4174]" />
-                    Detalle de Productos para Siigo ERP
+                    Detalle de Productos
                   </h2>
                   <span className="bg-[#001D39] text-[#7BBDE8] text-xs font-bold px-3 py-1 rounded-full">
-                    {productos.length} Productos
+                    {productos.length} Ítems
                   </span>
                 </div>
 
@@ -437,7 +416,7 @@ export default function MinimarketPOSPage() {
                       activeTab === 'text' ? 'bg-[#001D39] text-[#7BBDE8]' : 'text-[#49769F] hover:text-[#001D39]'
                     }`}
                   >
-                    Texto Procesado por IA
+                    Texto Procesado
                   </button>
                 </div>
 
@@ -459,7 +438,7 @@ export default function MinimarketPOSPage() {
                 <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 border-b border-[#EAF2F8] pb-3">
                   <div>
                     <h2 className="text-sm font-extrabold text-[#001D39] uppercase tracking-wider">
-                      Estructura XML Estandarizada para Siigo
+                      Estructura XML Generada
                     </h2>
                   </div>
                   <div className="flex gap-2">
@@ -489,14 +468,14 @@ export default function MinimarketPOSPage() {
         </section>
       </div>
 
-      {/* Supabase POS History Section */}
+      {/* History Section */}
       <section className="bg-white border border-[#BDD8E9] rounded-2xl p-6 shadow-md space-y-4">
         <div className="flex justify-between items-center border-b border-[#EAF2F8] pb-3">
           <div>
             <h2 className="text-base font-extrabold text-[#001D39]">
-              Historial de Compras Minimarket (Supabase)
+              Historial de Compras
             </h2>
-            <p className="text-xs text-[#49769F]">Registro automatizado de facturas almacenadas en la nube</p>
+            <p className="text-xs text-[#49769F]">Registro de facturas procesadas y guardadas</p>
           </div>
           <button
             onClick={loadHistory}
@@ -507,54 +486,48 @@ export default function MinimarketPOSPage() {
           </button>
         </div>
 
-        {!isDbConnected ? (
-          <div className="bg-[#EAF2F8] border border-[#BDD8E9] rounded-xl p-4 text-xs text-[#49769F] text-center font-medium">
-            Persistencia automática lista. Modos local y Supabase configurados.
-          </div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs border-collapse">
-              <thead>
-                <tr className="bg-[#001D39] text-[#BDD8E9] uppercase font-bold text-[11px]">
-                  <th className="p-3 rounded-l-lg">Fecha</th>
-                  <th className="p-3">Proveedor (NIT)</th>
-                  <th className="p-3">Subtotal</th>
-                  <th className="p-3">IVA</th>
-                  <th className="p-3">TOTAL</th>
-                  <th className="p-3 text-right rounded-r-lg">Acción</th>
+        <div className="overflow-x-auto">
+          <table className="w-full text-left text-xs border-collapse">
+            <thead>
+              <tr className="bg-[#001D39] text-[#BDD8E9] uppercase font-bold text-[11px]">
+                <th className="p-3 rounded-l-lg">Fecha</th>
+                <th className="p-3">Proveedor (NIT)</th>
+                <th className="p-3">Subtotal</th>
+                <th className="p-3">IVA</th>
+                <th className="p-3">TOTAL</th>
+                <th className="p-3 text-right rounded-r-lg">Acción</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-[#BDD8E9]/50">
+              {history.length === 0 ? (
+                <tr>
+                  <td colSpan={6} className="p-6 text-center text-[#49769F]">
+                    Aún no hay compras registradas.
+                  </td>
                 </tr>
-              </thead>
-              <tbody className="divide-y divide-[#BDD8E9]/50">
-                {history.length === 0 ? (
-                  <tr>
-                    <td colSpan={6} className="p-6 text-center text-[#49769F]">
-                      Aún no hay compras registradas en la base de datos.
+              ) : (
+                history.map((item) => (
+                  <tr key={item.id} className="hover:bg-[#EAF2F8]/60 transition-colors">
+                    <td className="p-3 font-semibold text-[#001D39]">{item.fecha}</td>
+                    <td className="p-3 font-extrabold text-[#0A4174]">{item.nit}</td>
+                    <td className="p-3 text-[#49769F] font-semibold">${item.subtotal}</td>
+                    <td className="p-3 text-[#49769F] font-semibold">${item.iva}</td>
+                    <td className="p-3 font-black text-[#001D39]">${item.total}</td>
+                    <td className="p-3 text-right">
+                      <button
+                        onClick={() => downloadXmlFile(item.xml_content, `factura_${item.nit}.xml`)}
+                        className="bg-[#001D39] hover:bg-[#0A4174] text-white px-3 py-1 rounded-lg text-xs font-bold inline-flex items-center gap-1 transition-all shadow-sm"
+                      >
+                        <Download className="w-3 h-3 text-[#7BBDE8]" />
+                        <span>XML</span>
+                      </button>
                     </td>
                   </tr>
-                ) : (
-                  history.map((item) => (
-                    <tr key={item.id} className="hover:bg-[#EAF2F8]/60 transition-colors">
-                      <td className="p-3 font-semibold text-[#001D39]">{item.fecha}</td>
-                      <td className="p-3 font-extrabold text-[#0A4174]">{item.nit}</td>
-                      <td className="p-3 text-[#49769F] font-semibold">${item.subtotal}</td>
-                      <td className="p-3 text-[#49769F] font-semibold">${item.iva}</td>
-                      <td className="p-3 font-black text-[#001D39]">${item.total}</td>
-                      <td className="p-3 text-right">
-                        <button
-                          onClick={() => downloadXmlFile(item.xml_content, `factura_${item.nit}.xml`)}
-                          className="bg-[#001D39] hover:bg-[#0A4174] text-white px-3 py-1 rounded-lg text-xs font-bold inline-flex items-center gap-1 transition-all shadow-sm"
-                        >
-                          <Download className="w-3 h-3 text-[#7BBDE8]" />
-                          <span>XML</span>
-                        </button>
-                      </td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
-        )}
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
       </section>
     </div>
   );
