@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Minimarket Invoice AI - Procesador Inteligente con Google Gemini API</title>
+    <title>Minimarket Invoice AI - Google Gemini API & Vercel</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
@@ -25,18 +25,18 @@
                 <div>
                     <div class="brand-title-wrap">
                         <h1>Minimarket<span class="brand-accent">Scan AI</span></h1>
-                        <span class="store-badge">🤖 Powered by Google Gemini AI</span>
+                        <span class="store-badge">🤖 Google Gemini AI + Vercel</span>
                     </div>
-                    <p class="subtitle">Digitalización automática de facturas a XML usando la API de Visión de Google</p>
+                    <p class="subtitle">Digitalización inteligente de facturas de proveedores a XML mediante IA en la Nube</p>
                 </div>
             </div>
             
             <div class="header-widgets">
                 <div class="widget-chip">
-                    <span class="chip-icon">🌐</span>
+                    <span class="chip-icon">⚡</span>
                     <div>
-                        <span class="chip-label">Motor de Análisis</span>
-                        <span class="chip-val" id="activeEngineText">Google Gemini API / OpenCV</span>
+                        <span class="chip-label">Servidor</span>
+                        <span class="chip-val">Vercel Serverless (Instantáneo)</span>
                     </div>
                 </div>
             </div>
@@ -48,23 +48,23 @@
                 <span class="stat-icon">🤖</span>
                 <div>
                     <span class="stat-number">Google Gemini 2.5 Flash</span>
-                    <span class="stat-desc">Visión por IA de Alta Precisión</span>
-                </div>
-            </div>
-            <div class="stat-divider"></div>
-            <div class="stat-box">
-                <span class="stat-icon">🧾</span>
-                <div>
-                    <span class="stat-number">XML Directo</span>
-                    <span class="stat-desc">Formato Contable y de Inventario</span>
+                    <span class="stat-desc">Visión por IA Multimodal</span>
                 </div>
             </div>
             <div class="stat-divider"></div>
             <div class="stat-box">
                 <span class="stat-icon">⚡</span>
                 <div>
-                    <span class="stat-number">Comprensión Visual</span>
-                    <span class="stat-desc">Lee fotos borrosas o arrugadas</span>
+                    <span class="stat-number">Despliegue Vercel</span>
+                    <span class="stat-desc">Respuesta Instantánea sin esperas</span>
+                </div>
+            </div>
+            <div class="stat-divider"></div>
+            <div class="stat-box">
+                <span class="stat-icon">📄</span>
+                <div>
+                    <span class="stat-number">XML Estructurado</span>
+                    <span class="stat-desc">Listo para Inventarios y Contabilidad</span>
                 </div>
             </div>
         </div>
@@ -75,7 +75,7 @@
             <section class="card upload-card">
                 <div class="card-header">
                     <h2><span class="step-num">1</span> Cargar Factura de Proveedor</h2>
-                    <p class="section-desc">Sube la foto del recibo de compra de verduras, abarrotes o bebidas.</p>
+                    <p class="section-desc">Sube la foto del recibo de compra de alimentos, abarrotes o bebidas.</p>
                 </div>
 
                 <div class="dropzone" id="dropzone">
@@ -96,16 +96,16 @@
                 <!-- API Key Config de Google Gemini -->
                 <div class="api-key-box">
                     <label for="geminiApiKey" class="input-label">
-                        <span>🔑 Clave de API de Google Gemini (Opcional):</span>
-                        <a href="https://aistudio.google.com/app/apikey" target="_blank" class="link-free">Consíguela gratis en Google AI Studio ↗</a>
+                        <span>🔑 Clave de API de Google Gemini:</span>
+                        <a href="https://aistudio.google.com/app/apikey" target="_blank" class="link-free">Obtener gratis en Google AI Studio ↗</a>
                     </label>
                     <input type="password" id="geminiApiKey" placeholder="Pega tu API Key de Google (ej. AIzaSy...)" class="api-input">
-                    <span class="input-hint">Si no ingresas una clave, se usará el motor de visión local OpenCV + OCR.</span>
+                    <span class="input-hint">También puedes configurarla como variable <code>GEMINI_API_KEY</code> en tu panel de Vercel.</span>
                 </div>
 
                 <div class="actions-group">
                     <button id="btnProcess" class="btn btn-primary" disabled>
-                        <span>🤖 Procesar con IA y Generar XML</span>
+                        <span>🤖 Analizar con IA y Generar XML</span>
                     </button>
                     <button id="btnSample" class="btn btn-secondary">
                         <span>🧪 Cargar Factura de Ejemplo Minimarket</span>
@@ -119,7 +119,7 @@
                         <strong>Ventaja de la API de Google Gemini:</strong>
                     </div>
                     <p class="info-text">
-                        Entiende automáticamente facturas de cualquier proveedor sin importar arrugas, manchas, dobleces ni tipografías complejas.
+                        Analiza facturas borrosas, arrugadas o manuscritas sin instalar programas locales ni usar expresiones regulares.
                     </p>
                 </div>
             </section>
@@ -132,8 +132,8 @@
                         <div class="spinner"></div>
                         <span class="spinner-center">🤖</span>
                     </div>
-                    <h3 id="loaderTitle">Analizando Factura con Google Gemini API...</h3>
-                    <p id="loaderText">Extrayendo NIT, Fecha, Subtotal, IVA y Total mediante Visión por IA...</p>
+                    <h3 id="loaderTitle">Analizando Factura con Google Gemini AI...</h3>
+                    <p id="loaderText">Extrayendo NIT, Fecha, Subtotal, IVA y Total mediante IA...</p>
                 </div>
 
                 <!-- Estado Inicial Vacío -->
@@ -142,7 +142,7 @@
                         <span class="illustration-icon">🧾</span>
                     </div>
                     <h3>Panel de Resultados Limpio</h3>
-                    <p>Sube la foto de la factura del proveedor en el panel izquierdo o presiona el botón de ejemplo para ver la extracción en tiempo real con la API de Google.</p>
+                    <p>Sube la foto de la factura del proveedor en el panel izquierdo o presiona el botón de ejemplo para ver la extracción con la API de Google Gemini.</p>
                 </div>
 
                 <!-- Contenedor con Resultados -->
@@ -152,7 +152,7 @@
                     <div class="card data-summary-card">
                         <div class="card-header-flex">
                             <h2><span class="step-num">2</span> Datos Extraídos por la IA</h2>
-                            <span class="tag-status" id="engineBadge">🤖 Google Gemini AI</span>
+                            <span class="tag-status">🤖 Google Gemini 2.5 Flash</span>
                         </div>
 
                         <div class="minimarket-metrics-grid">
@@ -198,22 +198,18 @@
                         </div>
                     </div>
 
-                    <!-- Comparativa OpenCV y Texto Bruto -->
+                    <!-- Visualización de Imagen & Texto -->
                     <div class="card visual-analysis-card">
                         <div class="tab-header">
                             <button class="tab-btn active" data-tab="tabImages">🖼️ Imagen Enviada a la API</button>
-                            <button class="tab-btn" data-tab="tabText">📝 Respuesta de la IA / OCR</button>
+                            <button class="tab-btn" data-tab="tabText">📝 Respuesta de la IA</button>
                         </div>
 
                         <div class="tab-content" id="tabImages">
-                            <div class="images-grid">
+                            <div class="single-img-preview">
                                 <div class="img-preview-box">
-                                    <div class="img-badge">Fotografía Original</div>
+                                    <div class="img-badge">Fotografía de la Factura</div>
                                     <img id="imgOriginal" src="" alt="Factura Original">
-                                </div>
-                                <div class="img-preview-box otsu-box">
-                                    <div class="img-badge otsu-badge">Filtro OpenCV Optimizado</div>
-                                    <img id="imgProcesada" src="" alt="Factura Procesada con OpenCV">
                                 </div>
                             </div>
                         </div>
