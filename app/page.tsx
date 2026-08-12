@@ -384,15 +384,15 @@ export default function MinimarketPOSPage() {
         />
 
         {/* Dynamic Page Content */}
-        <main className="flex-1 p-4 sm:p-6 lg:p-8 space-y-6 max-w-7xl w-full mx-auto animate-fade-in">
+        <main className="flex-1 p-3 sm:p-6 lg:p-8 space-y-4 sm:space-y-6 max-w-7xl w-full mx-auto animate-fade-in">
           {/* Top KPI Metrics (Always visible or in Dashboard) */}
           <DashboardStats history={history} activeBuyerName={buyerName} />
 
           {/* View: Dashboard or Uploader */}
           {(activeTab === 'dashboard' || activeTab === 'uploader') && (
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 lg:gap-6 items-start">
               {/* Left Column: Upload Dropzone */}
-              <div className="lg:col-span-5 space-y-6">
+              <div className="lg:col-span-5 space-y-4 sm:space-y-6">
                 <InvoiceUploader
                   selectedFile={selectedFile}
                   previewUrl={previewUrl}
