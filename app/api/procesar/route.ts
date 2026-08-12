@@ -52,7 +52,7 @@ const MINIMAL_PDF_BASE64 = (
 );
 
 // Genera la estructura XML UBL 2.1 oficial para Siigo Nube adaptada para cualquier Empresa Compradora
-export async function generarEstructuraSiigoIdentica(datos: FacturaDatos): Promise<{
+async function generarEstructuraSiigoIdentica(datos: FacturaDatos): Promise<{
   attachedXml: string;
   invoiceXml: string;
   zipFilename: string;
