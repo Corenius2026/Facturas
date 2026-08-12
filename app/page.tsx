@@ -23,7 +23,10 @@ import {
   CheckSquare,
   Square,
   FileSpreadsheet,
-  FileArchive
+  FileArchive,
+  Plus,
+  BookmarkCheck,
+  Check
 } from 'lucide-react';
 import JSZip from 'jszip';
 
@@ -36,11 +39,19 @@ interface ProductoItem {
 
 interface InvoiceFields {
   NIT: string;
+  NombreProveedor?: string;
+  BuyerNIT?: string;
+  BuyerName?: string;
   Fecha: string;
   Subtotal: string;
   IVA: string;
   Total: string;
   Productos?: ProductoItem[];
+}
+
+interface EmpresaGuardada {
+  nit: string;
+  nombre: string;
 }
 
 interface SupabaseInvoice {
@@ -54,27 +65,268 @@ interface SupabaseInvoice {
   creado_en: string;
 }
 
+function escapeXml(unsafe: string): string {
+  if (!unsafe) return '';
+  return unsafe
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&apos;');
+}
+
+function limpiarValorNumerico(strVal: string): number {
+  if (!strVal) return 0;
+  const num = parseFloat(strVal.replace(/[^0-9.-]+/g, ''));
+  return isNaN(num) ? 0 : num;
+}
+
+const VALID_PDF_BASE64 = (
+  'JVBERi0xLjQKJcFSWzENCjEgMCBvYmo8PC9UeXBlL0NhdGFsb2cvUGFnZXMgMiAwIFI+PmVuZG9iagoy' +
+  'IDAwYmo8PC9UeXBlL1BhZ2VzL0NvdW50IDEvS2lkc1szIDAgUl0+PmVuZG9iagozIDAgb2JqPDwvVHlw' +
+  'ZS9QYWdlL01lZGlhQm94WzAgMCA2MTIgNzkyXS9SZXNvdXJjZXM8PC9Gb250PDwvRjEgNCAwIFI+Pj4+' +
+  '/Q29udGVudHMgNSAwIFIvUGFyZW50IDIgMCBSPj5lbmRvYmoKNCAwIG9iajw8L1R5cGUvRm9udC9T' +
+  'dWJ0eXBlL1R5cGUxL0Jhc2VGb250L0hlbHZldGljYT4+ZW5kb2JqCjUgMCBvYmo8PC9MZW5ndGggNzg+' +
+  'PnN0cmVhbQpCVAovRjEgMTIgVGYKNzAgNzEwIFRkCihGYWN0dXJhIGRlIENvbXByYSAtIE1pbmltYXJr' +
+  'ZXQgUE9TKSBUagpFVAplbmRzdHJlYW0KZW5kb2JqCnhyZWYKMCA2CjAwMDAwMDAwMDAgNjU1MzUgZiAN' +
+  'CjAwMDAwMDAwMDkgMDAwMDAgbiANCjAwMDAwMDAwNTggMDAwMDAgbiANCjAwMDAwMDAxMTUgMDAwMDAg' +
+  'biANCjAwMDAwMDAyMjEgMDAwMDAgbiANCjAwMDAwMDAyOTIgMDAwMDAgbiANCnRyYWlsZXIKPDwvU2l6' +
+  'ZSA2L1Jvb3QgMSAwIFI+PgpzdGFydHhyZWYKNDIxCiUlRU9G'
+);
+
+function generarXmlSiigoClient(datos: InvoiceFields) {
+  const nitProvRaw = (datos.NIT || '822007117').replace(/[^0-9]/g, '');
+  const nitProvPadded = nitProvRaw.padStart(10, '0');
+  const provNameEscaped = escapeXml(datos.NombreProveedor || `PROVEEDOR ${nitProvRaw}`);
+
+  const nitBuyerRaw = (datos.BuyerNIT || '901584216').replace(/[^0-9]/g, '');
+  const nitBuyer = nitBuyerRaw || '901584216';
+  const buyerNameEscaped = escapeXml(datos.BuyerName || 'MI EMPRESA SAS');
+
+  const fecha = datos.Fecha || new Date().toISOString().split('T')[0];
+  const numFactura = `FE-${Math.floor(10000 + Math.random() * 90000)}`;
+
+  const cufeSha384 = Array.from({ length: 96 }, () => Math.floor(Math.random() * 16).toString(16)).join('');
+  const cudeSha384 = Array.from({ length: 96 }, () => Math.floor(Math.random() * 16).toString(16)).join('');
+
+  const key27 = `08${nitProvPadded}04720260000x39efe`.substring(0, 27);
+  const zipFilename = `z${key27}.zip`;
+  const xmlFilenameInside = `ad${key27}.xml`;
+  const pdfFilenameInside = `fv${key27}.pdf`;
+
+  const subtotalNum = limpiarValorNumerico(datos.Subtotal);
+  const ivaNum = limpiarValorNumerico(datos.IVA);
+  const totalNum = limpiarValorNumerico(datos.Total) || (subtotalNum + ivaNum);
+
+  const productosList = (datos.Productos && datos.Productos.length > 0)
+    ? datos.Productos
+    : [{ cantidad: '1', descripcion: 'MERCANCIA GENERAL', precio_unitario: datos.Subtotal, total_item: datos.Subtotal }];
+
+  const lineCount = productosList.length;
+
+  const productosXmlLines = productosList.map((p, index) => {
+    const cantNum = limpiarValorNumerico(p.cantidad) || 1;
+    const totalItemNum = limpiarValorNumerico(p.total_item) || (limpiarValorNumerico(p.precio_unitario) * cantNum);
+    const precioUnitNum = limpiarValorNumerico(p.precio_unitario) || (totalItemNum / cantNum);
+    const lineIva = Math.round(totalItemNum * 0.19 * 100) / 100;
+    const descEscaped = escapeXml(p.descripcion || 'PRODUCTO');
+
+    return `    <cac:InvoiceLine>
+      <cbc:ID>${index + 1}</cbc:ID>
+      <cbc:InvoicedQuantity unitCode="94">${cantNum.toFixed(2)}</cbc:InvoicedQuantity>
+      <cbc:LineExtensionAmount currencyID="COP">${totalItemNum.toFixed(2)}</cbc:LineExtensionAmount>
+      <cac:TaxTotal>
+        <cbc:TaxAmount currencyID="COP">${lineIva.toFixed(2)}</cbc:TaxAmount>
+        <cac:TaxSubtotal>
+          <cbc:TaxableAmount currencyID="COP">${totalItemNum.toFixed(2)}</cbc:TaxableAmount>
+          <cbc:TaxAmount currencyID="COP">${lineIva.toFixed(2)}</cbc:TaxAmount>
+          <cac:TaxCategory>
+            <cbc:Percent>19.00</cbc:Percent>
+            <cac:TaxScheme>
+              <cbc:ID>01</cbc:ID>
+              <cbc:Name>IVA</cbc:Name>
+            </cac:TaxScheme>
+          </cac:TaxCategory>
+        </cac:TaxSubtotal>
+      </cac:TaxTotal>
+      <cac:Item>
+        <cbc:Description>${descEscaped}</cbc:Description>
+        <cac:StandardItemIdentification>
+          <cbc:ID schemeID="999">${index + 101}</cbc:ID>
+        </cac:StandardItemIdentification>
+      </cac:Item>
+      <cac:Price>
+        <cbc:PriceAmount currencyID="COP">${precioUnitNum.toFixed(2)}</cbc:PriceAmount>
+        <cbc:BaseQuantity unitCode="94">1.00</cbc:BaseQuantity>
+      </cac:Price>
+    </cac:InvoiceLine>`;
+  }).join('\n');
+
+  const invoiceXml = `<?xml version="1.0" encoding="UTF-8"?>
+<Invoice xmlns:cac="urn:oasis:names:specification:ubl:schema:xsd:CommonAggregateComponents-2"
+         xmlns:cbc="urn:oasis:names:specification:ubl:schema:xsd:CommonBasicComponents-2"
+         xmlns:ext="urn:oasis:names:specification:ubl:schema:xsd:CommonExtensionComponents-2"
+         xmlns:sts="dian:gov:co:facturaelectronica:Structures-2-1"
+         xmlns="urn:oasis:names:specification:ubl:schema:xsd:Invoice-2">
+  <cbc:UBLVersionID>UBL 2.1</cbc:UBLVersionID>
+  <cbc:CustomizationID>10</cbc:CustomizationID>
+  <cbc:ProfileID>DIAN 2.1: Factura Electrónica de Venta</cbc:ProfileID>
+  <cbc:ProfileExecutionID>1</cbc:ProfileExecutionID>
+  <cbc:ID>${numFactura}</cbc:ID>
+  <cbc:UUID schemeID="1" schemeName="CUFE-SHA384">${cufeSha384}</cbc:UUID>
+  <cbc:IssueDate>${fecha}</cbc:IssueDate>
+  <cbc:IssueTime>12:00:00-05:00</cbc:IssueTime>
+  <cbc:DueDate>${fecha}</cbc:DueDate>
+  <cbc:InvoiceTypeCode>01</cbc:InvoiceTypeCode>
+  <cbc:DocumentCurrencyCode>COP</cbc:DocumentCurrencyCode>
+  <cbc:LineCountNumeric>${lineCount}</cbc:LineCountNumeric>
+  <cac:AccountingSupplierParty>
+    <cbc:AdditionalAccountID schemeAgencyID="195">1</cbc:AdditionalAccountID>
+    <cac:Party>
+      <cac:PartyName>
+        <cbc:Name>${provNameEscaped}</cbc:Name>
+      </cac:PartyName>
+      <cac:PartyTaxScheme>
+        <cbc:RegistrationName>${provNameEscaped}</cbc:RegistrationName>
+        <cbc:CompanyID schemeAgencyID="195" schemeAgencyName="CO, DIAN (Dirección de Impuestos y Aduanas Nacionales)" schemeName="31" schemeID="7">${nitProvRaw}</cbc:CompanyID>
+        <cbc:TaxLevelCode>R-99-PN</cbc:TaxLevelCode>
+        <cac:TaxScheme>
+          <cbc:ID>01</cbc:ID>
+          <cbc:Name>IVA</cbc:Name>
+        </cac:TaxScheme>
+      </cac:PartyTaxScheme>
+      <cac:PartyLegalEntity>
+        <cbc:RegistrationName>${provNameEscaped}</cbc:RegistrationName>
+        <cbc:CompanyID schemeAgencyID="195" schemeAgencyName="CO, DIAN (Dirección de Impuestos y Aduanas Nacionales)" schemeName="31" schemeID="7">${nitProvRaw}</cbc:CompanyID>
+      </cac:PartyLegalEntity>
+    </cac:Party>
+  </cac:AccountingSupplierParty>
+  <cac:AccountingCustomerParty>
+    <cbc:AdditionalAccountID schemeAgencyID="195">1</cbc:AdditionalAccountID>
+    <cac:Party>
+      <cac:PartyIdentification>
+        <cbc:ID schemeAgencyID="195" schemeName="31" schemeID="8">${nitBuyer}</cbc:ID>
+      </cac:PartyIdentification>
+      <cac:PartyName>
+        <cbc:Name>${buyerNameEscaped}</cbc:Name>
+      </cac:PartyName>
+      <cac:PartyTaxScheme>
+        <cbc:RegistrationName>${buyerNameEscaped}</cbc:RegistrationName>
+        <cbc:CompanyID schemeAgencyID="195" schemeAgencyName="CO, DIAN (Dirección de Impuestos y Aduanas Nacionales)" schemeName="31" schemeID="8">${nitBuyer}</cbc:CompanyID>
+        <cbc:TaxLevelCode>R-99-PN</cbc:TaxLevelCode>
+        <cac:TaxScheme>
+          <cbc:ID>01</cbc:ID>
+          <cbc:Name>IVA</cbc:Name>
+        </cac:TaxScheme>
+      </cac:PartyTaxScheme>
+      <cac:PartyLegalEntity>
+        <cbc:RegistrationName>${buyerNameEscaped}</cbc:RegistrationName>
+        <cbc:CompanyID schemeAgencyID="195" schemeAgencyName="CO, DIAN (Dirección de Impuestos y Aduanas Nacionales)" schemeName="31" schemeID="8">${nitBuyer}</cbc:CompanyID>
+      </cac:PartyLegalEntity>
+    </cac:Party>
+  </cac:AccountingCustomerParty>
+  <cac:TaxTotal>
+    <cbc:TaxAmount currencyID="COP">${ivaNum.toFixed(2)}</cbc:TaxAmount>
+    <cac:TaxSubtotal>
+      <cbc:TaxableAmount currencyID="COP">${subtotalNum.toFixed(2)}</cbc:TaxableAmount>
+      <cbc:TaxAmount currencyID="COP">${ivaNum.toFixed(2)}</cbc:TaxAmount>
+      <cac:TaxCategory>
+        <cbc:Percent>19.00</cbc:Percent>
+        <cac:TaxScheme>
+          <cbc:ID>01</cbc:ID>
+          <cbc:Name>IVA</cbc:Name>
+        </cac:TaxScheme>
+      </cac:TaxCategory>
+    </cac:TaxSubtotal>
+  </cac:TaxTotal>
+  <cac:LegalMonetaryTotal>
+    <cbc:LineExtensionAmount currencyID="COP">${subtotalNum.toFixed(2)}</cbc:LineExtensionAmount>
+    <cbc:TaxExclusiveAmount currencyID="COP">${subtotalNum.toFixed(2)}</cbc:TaxExclusiveAmount>
+    <cbc:TaxInclusiveAmount currencyID="COP">${totalNum.toFixed(2)}</cbc:TaxInclusiveAmount>
+    <cbc:AllowanceTotalAmount currencyID="COP">0.00</cbc:AllowanceTotalAmount>
+    <cbc:ChargeTotalAmount currencyID="COP">0.00</cbc:ChargeTotalAmount>
+    <cbc:PrepaidAmount currencyID="COP">0.00</cbc:PrepaidAmount>
+    <cbc:PayableAmount currencyID="COP">${totalNum.toFixed(2)}</cbc:PayableAmount>
+  </cac:LegalMonetaryTotal>
+${productosXmlLines}
+</Invoice>`;
+
+  const attachedXml = `<?xml version="1.0" encoding="UTF-8"?>
+<AttachedDocument xmlns:cac="urn:oasis:names:specification:ubl:schema:xsd:CommonAggregateComponents-2"
+                  xmlns:cbc="urn:oasis:names:specification:ubl:schema:xsd:CommonBasicComponents-2"
+                  xmlns:ext="urn:oasis:names:specification:ubl:schema:xsd:CommonExtensionComponents-2"
+                  xmlns="urn:oasis:names:specification:ubl:schema:xsd:AttachedDocument-2">
+  <cbc:UBLVersionID>UBL 2.1</cbc:UBLVersionID>
+  <cbc:CustomizationID>Documentos de adjunto de Factura Electronica</cbc:CustomizationID>
+  <cbc:ProfileID>Factura Electrónica de Venta</cbc:ProfileID>
+  <cbc:ProfileExecutionID>1</cbc:ProfileExecutionID>
+  <cbc:ID>${numFactura}</cbc:ID>
+  <cbc:UUID schemeName="CUDE-SHA384">${cudeSha384}</cbc:UUID>
+  <cbc:IssueDate>${fecha}</cbc:IssueDate>
+  <cbc:IssueTime>12:00:00-05:00</cbc:IssueTime>
+  <cac:SenderParty>
+    <cac:PartyTaxScheme>
+      <cbc:RegistrationName>${provNameEscaped}</cbc:RegistrationName>
+      <cbc:CompanyID schemeAgencyID="195" schemeAgencyName="CO, DIAN (Dirección de Impuestos y Aduanas Nacionales)" schemeName="31" schemeID="7">${nitProvRaw}</cbc:CompanyID>
+      <cbc:TaxLevelCode>R-99-PN</cbc:TaxLevelCode>
+      <cac:TaxScheme>
+        <cbc:ID>01</cbc:ID>
+        <cbc:Name>IVA</cbc:Name>
+      </cac:TaxScheme>
+    </cac:PartyTaxScheme>
+  </cac:SenderParty>
+  <cac:ReceiverParty>
+    <cac:PartyTaxScheme>
+      <cbc:RegistrationName>${buyerNameEscaped}</cbc:RegistrationName>
+      <cbc:CompanyID schemeAgencyID="195" schemeAgencyName="CO, DIAN (Dirección de Impuestos y Aduanas Nacionales)" schemeName="31" schemeID="8">${nitBuyer}</cbc:CompanyID>
+      <cbc:TaxLevelCode>R-99-PN</cbc:TaxLevelCode>
+      <cac:TaxScheme>
+        <cbc:ID>01</cbc:ID>
+        <cbc:Name>IVA</cbc:Name>
+      </cac:TaxScheme>
+    </cac:PartyTaxScheme>
+  </cac:ReceiverParty>
+  <cac:Attachment>
+    <cac:ExternalReference>
+      <cbc:MimeCode>text/xml</cbc:MimeCode>
+      <cbc:EncodingCode>UTF-8</cbc:EncodingCode>
+      <cbc:Description><![CDATA[${invoiceXml}]]></cbc:Description>
+    </cac:ExternalReference>
+  </cac:Attachment>
+  <cac:ParentDocumentLineReference>
+    <cbc:LineID>1</cbc:LineID>
+    <cbc:DocumentTypeCode>1</cbc:DocumentTypeCode>
+    <cac:DocumentReference>
+      <cbc:ID>${numFactura}</cbc:ID>
+      <cbc:UUID>${cufeSha384}</cbc:UUID>
+      <cbc:IssueDate>${fecha}</cbc:IssueDate>
+    </cac:DocumentReference>
+  </cac:ParentDocumentLineReference>
+</AttachedDocument>`;
+
+  return { attachedXml, invoiceXml, zipFilename, xmlFilenameInside, pdfFilenameInside };
+}
+
 export default function MinimarketPOSPage() {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
-  const [buyerNit, setBuyerNit] = useState<string>('');
+  const [buyerNit, setBuyerNit] = useState<string>('901584216');
+  const [buyerName, setBuyerName] = useState<string>('DISTRIBUIDORA AHORRA MAX SAS');
+  const [savedCompanies, setSavedCompanies] = useState<EmpresaGuardada[]>([]);
+  
   const [previewUrl, setPreviewUrl] = useState<string>('');
   const [isProcessing, setIsProcessing] = useState<boolean>(false);
-  const [activeTab, setActiveTab] = useState<'image' | 'text'>('image');
 
   const [fields, setFields] = useState<InvoiceFields | null>(null);
   const [productos, setProductos] = useState<ProductoItem[]>([]);
   const [rawText, setRawText] = useState<string>('');
   const [xmlContent, setXmlContent] = useState<string>('');
-  const [invoiceXmlContent, setInvoiceXmlContent] = useState<string>('');
   const [zipFilename, setZipFilename] = useState<string>('');
   const [xmlFilenameInside, setXmlFilenameInside] = useState<string>('');
   const [pdfFilenameInside, setPdfFilenameInside] = useState<string>('');
-  const [zipB64, setZipB64] = useState<string>('');
 
   const [history, setHistory] = useState<SupabaseInvoice[]>([]);
   const [selectedInvoiceIds, setSelectedInvoiceIds] = useState<string[]>([]);
   const [isDeleting, setIsDeleting] = useState<boolean>(false);
-  const [isDbConnected, setIsDbConnected] = useState<boolean>(false);
 
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' | 'warning' } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -84,11 +336,85 @@ export default function MinimarketPOSPage() {
     setTimeout(() => setToast(null), 3500);
   };
 
+  // Cargar empresas guardadas del usuario desde localStorage
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem('siigo_empresas');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          setSavedCompanies(parsed);
+          setBuyerNit(parsed[0].nit);
+          setBuyerName(parsed[0].nombre);
+        }
+      } else {
+        const defaultList: EmpresaGuardada[] = [
+          { nit: '901584216', nombre: 'DISTRIBUIDORA AHORRA MAX SAS' }
+        ];
+        setSavedCompanies(defaultList);
+        localStorage.setItem('siigo_empresas', JSON.stringify(defaultList));
+      }
+    } catch (e) {
+      console.error('Error loading saved companies:', e);
+    }
+  }, []);
+
+  const handleSaveCurrentCompany = () => {
+    if (!buyerNit.trim()) {
+      showToast('Ingresa un NIT válido para guardar la empresa.', 'warning');
+      return;
+    }
+    const cleanNit = buyerNit.replace(/[^0-9]/g, '');
+    const cleanName = buyerName.trim() || `EMPRESA ${cleanNit}`;
+    
+    const existing = savedCompanies.filter(c => c.nit !== cleanNit);
+    const updated = [...existing, { nit: cleanNit, nombre: cleanName }];
+    setSavedCompanies(updated);
+    localStorage.setItem('siigo_empresas', JSON.stringify(updated));
+    showToast(`Empresa ${cleanName} guardada en tu lista.`, 'success');
+  };
+
+  const handleSelectCompany = (comp: EmpresaGuardada) => {
+    setBuyerNit(comp.nit);
+    setBuyerName(comp.nombre);
+    
+    // Regenerar XML al instante si hay factura activa
+    if (fields) {
+      const updatedFields = { ...fields, BuyerNIT: comp.nit, BuyerName: comp.nombre };
+      setFields(updatedFields);
+      const est = generarXmlSiigoClient(updatedFields);
+      setXmlContent(est.attachedXml);
+      setZipFilename(est.zipFilename);
+      setXmlFilenameInside(est.xmlFilenameInside);
+      setPdfFilenameInside(est.pdfFilenameInside);
+    }
+    showToast(`Empresa activa cambiada a: ${comp.nombre}`, 'success');
+  };
+
+  const handleBuyerNitChange = (val: string) => {
+    setBuyerNit(val);
+    if (fields) {
+      const updatedFields = { ...fields, BuyerNIT: val };
+      setFields(updatedFields);
+      const est = generarXmlSiigoClient(updatedFields);
+      setXmlContent(est.attachedXml);
+    }
+  };
+
+  const handleBuyerNameChange = (val: string) => {
+    setBuyerName(val);
+    if (fields) {
+      const updatedFields = { ...fields, BuyerName: val };
+      setFields(updatedFields);
+      const est = generarXmlSiigoClient(updatedFields);
+      setXmlContent(est.attachedXml);
+    }
+  };
+
   const loadHistory = async () => {
     try {
       const res = await fetch('/api/facturas');
       const data = await res.json();
-      setIsDbConnected(data.connected);
       if (data.connected && data.facturas) {
         setHistory(data.facturas);
       }
@@ -129,6 +455,9 @@ export default function MinimarketPOSPage() {
     if (buyerNit.trim()) {
       formData.append('buyer_nit', buyerNit.trim());
     }
+    if (buyerName.trim()) {
+      formData.append('buyer_name', buyerName.trim());
+    }
 
     try {
       const res = await fetch('/api/procesar', {
@@ -142,17 +471,35 @@ export default function MinimarketPOSPage() {
         throw new Error(result.detail || 'Error al procesar la factura.');
       }
 
-      setFields(result.fields);
+      // Si la IA detectó un comprador y no teníamos uno personalizado, usamos el detectado
+      if (result.fields?.BuyerNIT && result.fields.BuyerNIT !== '901584216') {
+        setBuyerNit(result.fields.BuyerNIT);
+      }
+      if (result.fields?.BuyerName && result.fields.BuyerName !== 'MI EMPRESA SAS') {
+        setBuyerName(result.fields.BuyerName);
+      }
+
+      const activeBuyerNit = result.fields?.BuyerNIT || buyerNit;
+      const activeBuyerName = result.fields?.BuyerName || buyerName;
+
+      const fullFields: InvoiceFields = {
+        ...result.fields,
+        BuyerNIT: activeBuyerNit,
+        BuyerName: activeBuyerName,
+      };
+
+      setFields(fullFields);
       setProductos(result.productos || result.fields?.Productos || []);
       setRawText(result.raw_text);
-      setXmlContent(result.xml_content);
-      setInvoiceXmlContent(result.invoice_xml_content || '');
-      setZipFilename(result.zip_filename || '');
-      setXmlFilenameInside(result.xml_filename_inside || '');
-      setPdfFilenameInside(result.pdf_filename_inside || '');
-      setZipB64(result.zip_b64 || '');
 
-      showToast('¡Factura analizada e integrada para Siigo!', 'success');
+      // Generar XML exacto sincronizado
+      const est = generarXmlSiigoClient(fullFields);
+      setXmlContent(est.attachedXml);
+      setZipFilename(est.zipFilename);
+      setXmlFilenameInside(est.xmlFilenameInside);
+      setPdfFilenameInside(est.pdfFilenameInside);
+
+      showToast('¡Factura analizada e integrada con éxito!', 'success');
       loadHistory();
     } catch (err: any) {
       showToast(err.message || 'Error en el procesamiento de la factura', 'error');
@@ -183,56 +530,35 @@ export default function MinimarketPOSPage() {
   };
 
   const downloadSiigoZipFile = async () => {
-    if (!fields || !xmlContent) {
+    if (!fields) {
       showToast('No hay factura procesada para descargar.', 'warning');
       return;
     }
 
     try {
-      const nitProvRaw = (fields.NIT || '822007117').replace(/[^0-9]/g, '');
-      const nitProvPadded = nitProvRaw.padStart(10, '0');
-      const key27 = `08${nitProvPadded}04720260000x39efe`.substring(0, 27);
+      // Regenerar el XML garantizando que use el BuyerNIT y BuyerName seleccionados
+      const currentFields: InvoiceFields = {
+        ...fields,
+        BuyerNIT: buyerNit,
+        BuyerName: buyerName,
+      };
 
-      const targetZipFilename = zipFilename || `z${key27}.zip`;
-      const targetXmlInside = xmlFilenameInside || `ad${key27}.xml`;
-      const targetPdfInside = pdfFilenameInside || `fv${key27}.pdf`;
+      const est = generarXmlSiigoClient(currentFields);
+      const targetZipFilename = est.zipFilename;
+      const targetXmlInside = est.xmlFilenameInside;
+      const targetPdfInside = est.pdfFilenameInside;
 
-      let zipBlob: Blob;
-
-      if (zipB64) {
-        const cleanB64 = zipB64.replace(/[^A-Za-z0-9+/=]/g, '');
-        const binaryStr = atob(cleanB64);
-        const len = binaryStr.length;
-        const bytes = new Uint8Array(len);
-        for (let i = 0; i < len; i++) {
-          bytes[i] = binaryStr.charCodeAt(i);
-        }
-        zipBlob = new Blob([bytes], { type: 'application/zip' });
-      } else {
-        const pdfBase64Clean = (
-          'JVBERi0xLjQKJcFSWzENCjEgMCBvYmo8PC9UeXBlL0NhdGFsb2cvUGFnZXMgMiAwIFI+PmVuZG9iagoy' +
-          'IDAwYmo8PC9UeXBlL1BhZ2VzL0NvdW50IDEvS2lkc1szIDAgUl0+PmVuZG9iagozIDAgb2JqPDwvVHlw' +
-          'ZS9QYWdlL01lZGlhQm94WzAgMCA2MTIgNzkyXS9SZXNvdXJjZXM8PC9Gb250PDwvRjEgNCAwIFI+Pj4+' +
-          '/Q29udGVudHMgNSAwIFIvUGFyZW50IDIgMCBSPj5lbmRvYmoKNCAwIG9iajw8L1R5cGUvRm9udC9T' +
-          'dWJ0eXBlL1R5cGUxL0Jhc2VGb250L0hlbHZldGljYT4+ZW5kb2JqCjUgMCBvYmo8PC9MZW5ndGggNzg+' +
-          'PnN0cmVhbQpCVAovRjEgMTIgVGYKNzAgNzEwIFRkCihGYWN0dXJhIGRlIENvbXByYSAtIE1pbmltYXJr' +
-          'ZXQgUE9TKSBUagpFVAplbmRzdHJlYW0KZW5kb2JqCnhyZWYKMCA2CjAwMDAwMDAwMDAgNjU1MzUgZiAN' +
-          'CjAwMDAwMDAwMDkgMDAwMDAgbiANCjAwMDAwMDAwNTggMDAwMDAgbiANCjAwMDAwMDAxMTUgMDAwMDAg' +
-          'biANCjAwMDAwMDAyMjEgMDAwMDAgbiANCjAwMDAwMDAyOTIgMDAwMDAgbiANCnRyYWlsZXIKPDwvU2l6' +
-          'ZSA2L1Jvb3QgMSAwIFI+PgpzdGFydHhyZWYKNDIxCiUlRU9G'
-        ).replace(/[^A-Za-z0-9+/=]/g, '');
-
-        const pdfBinary = atob(pdfBase64Clean);
-        const pdfBytes = new Uint8Array(pdfBinary.length);
-        for (let i = 0; i < pdfBinary.length; i++) {
-          pdfBytes[i] = pdfBinary.charCodeAt(i);
-        }
-
-        const zip = new JSZip();
-        zip.file(targetXmlInside, xmlContent);
-        zip.file(targetPdfInside, pdfBytes);
-        zipBlob = await zip.generateAsync({ type: 'blob' });
+      const pdfBase64Clean = VALID_PDF_BASE64.replace(/[^A-Za-z0-9+/=]/g, '');
+      const pdfBinary = atob(pdfBase64Clean);
+      const pdfBytes = new Uint8Array(pdfBinary.length);
+      for (let i = 0; i < pdfBinary.length; i++) {
+        pdfBytes[i] = pdfBinary.charCodeAt(i);
       }
+
+      const zip = new JSZip();
+      zip.file(targetXmlInside, est.attachedXml);
+      zip.file(targetPdfInside, pdfBytes);
+      const zipBlob = await zip.generateAsync({ type: 'blob' });
 
       const url = URL.createObjectURL(zipBlob);
       const a = document.createElement('a');
@@ -242,7 +568,7 @@ export default function MinimarketPOSPage() {
       a.click();
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
-      showToast(`¡Paquete ${targetZipFilename} descargado con éxito!`, 'success');
+      showToast(`¡Paquete ${targetZipFilename} descargado para Siigo!`, 'success');
     } catch (err: any) {
       console.error('Error al empaquetar ZIP:', err);
       showToast(err?.message || 'Error al generar el archivo .ZIP', 'error');
@@ -251,9 +577,12 @@ export default function MinimarketPOSPage() {
 
   const downloadSiigoCsvFile = () => {
     if (!fields) return;
-    const headers = ["NIT Proveedor", "Fecha Emision", "Subtotal", "IVA", "Total Factura", "Cantidad", "Descripcion Producto", "Precio Unitario", "Total Producto"];
+    const headers = ["NIT Proveedor", "Nombre Proveedor", "NIT Comprador", "Empresa Compradora", "Fecha Emision", "Subtotal", "IVA", "Total Factura", "Cantidad", "Descripcion Producto", "Precio Unitario", "Total Producto"];
     const rows = (productos.length > 0 ? productos : [{ cantidad: "1", descripcion: "Mercancia General", precio_unitario: fields.Subtotal, total_item: fields.Subtotal }]).map(p => [
       `"${fields.NIT}"`,
+      `"${(fields.NombreProveedor || '').replace(/"/g, '""')}"`,
+      `"${buyerNit}"`,
+      `"${buyerName.replace(/"/g, '""')}"`,
       `"${fields.Fecha}"`,
       `"${fields.Subtotal}"`,
       `"${fields.IVA}"`,
@@ -340,7 +669,7 @@ export default function MinimarketPOSPage() {
       )}
 
       {/* Clean Premium Header Banner */}
-      <header className="bg-gradient-to-r from-[#001D39] via-[#0A4174] to-[#001D39] rounded-2xl p-6 sm:p-8 text-white shadow-xl border border-[#49769F]/30 flex items-center justify-between">
+      <header className="bg-gradient-to-r from-[#001D39] via-[#0A4174] to-[#001D39] rounded-2xl p-6 sm:p-8 text-white shadow-xl border border-[#49769F]/30 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div className="flex items-center gap-5">
           <div className="w-16 h-16 bg-white/10 backdrop-blur-md border border-white/20 rounded-2xl flex items-center justify-center shadow-inner">
             <Store className="w-8 h-8 text-[#7BBDE8]" />
@@ -354,60 +683,145 @@ export default function MinimarketPOSPage() {
                 Modelo Funcional V1
               </span>
             </div>
-            <p className="text-[#BDD8E9] text-xs sm:text-sm mt-1 font-medium">Digitalizador de Facturas de Proveedores e Importación a Siigo</p>
+            <p className="text-[#BDD8E9] text-xs sm:text-sm mt-1 font-medium">Digitalizador Multi-Empresa de Facturas para Siigo Nube</p>
           </div>
         </div>
       </header>
 
       {/* Main Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-        {/* Left Column: Upload */}
-        <section className="lg:col-span-5 bg-white border border-[#BDD8E9] rounded-2xl p-6 shadow-md hover:shadow-lg transition-all space-y-6 flex flex-col justify-between">
-          <div className="space-y-4">
+        {/* Left Column: Upload and Company Selector */}
+        <section className="lg:col-span-5 space-y-6">
+          {/* Active Company Selector (Multi-Empresa) */}
+          <div className="bg-white border border-[#BDD8E9] rounded-2xl p-6 shadow-md space-y-4">
             <div className="flex items-center justify-between border-b border-[#EAF2F8] pb-3">
-              <h2 className="text-base font-bold text-[#001D39] flex items-center gap-2">
-                <FileCheck2 className="w-5 h-5 text-[#0A4174]" />
-                Factura de Proveedor
+              <h2 className="text-sm font-extrabold text-[#001D39] flex items-center gap-2 uppercase tracking-wider">
+                <Building2 className="w-4 h-4 text-[#0A4174]" />
+                Empresa Receptora en Siigo
               </h2>
+              <span className="bg-[#EAF2F8] text-[#0A4174] text-[10px] font-black px-2.5 py-0.5 rounded-full border border-[#BDD8E9]">
+                Multi-Empresa
+              </span>
             </div>
 
-            <div
-              onDragOver={(e) => e.preventDefault()}
-              onDrop={handleDrop}
-              onClick={() => fileInputRef.current?.click()}
-              className="border-2 border-dashed border-[#49769F]/40 hover:border-[#0A4174] bg-[#EAF2F8]/50 hover:bg-[#EAF2F8] transition-all rounded-2xl p-8 text-center cursor-pointer relative group"
-            >
-              <input
-                type="file"
-                ref={fileInputRef}
-                accept="image/*"
-                className="hidden"
-                onChange={(e) => e.target.files?.[0] && handleFileSelect(e.target.files[0])}
-              />
-              <div className="w-14 h-14 bg-white border border-[#BDD8E9] rounded-full flex items-center justify-center mx-auto mb-3 text-[#0A4174] shadow-sm group-hover:scale-110 transition-transform">
-                <UploadCloud className="w-7 h-7 text-[#0A4174]" />
-              </div>
-              <h3 className="font-bold text-sm text-[#001D39]">Arrastra la imagen de la factura</h3>
-              <p className="text-xs text-[#49769F] mt-1">o <span className="text-[#0A4174] font-bold underline">explora tus archivos</span> (.jpg, .png)</p>
-              
-              {selectedFile && (
-                <div className="mt-4 inline-flex items-center gap-2 bg-[#001D39] text-[#7BBDE8] px-3.5 py-1.5 rounded-xl text-xs font-semibold shadow">
-                  <FileText className="w-4 h-4" />
-                  <span>{selectedFile.name}</span>
+            {/* Saved Companies Quick Switcher */}
+            {savedCompanies.length > 0 && (
+              <div className="space-y-1.5">
+                <span className="text-[11px] font-bold text-[#49769F] uppercase tracking-wider block">
+                  Seleccionar Empresa Guardada:
+                </span>
+                <div className="flex flex-wrap gap-1.5">
+                  {savedCompanies.map((comp) => {
+                    const isSelected = buyerNit.replace(/[^0-9]/g, '') === comp.nit.replace(/[^0-9]/g, '');
+                    return (
+                      <button
+                        key={comp.nit}
+                        type="button"
+                        onClick={() => handleSelectCompany(comp)}
+                        className={`text-xs px-3 py-1.5 rounded-xl font-bold flex items-center gap-1.5 transition-all border ${
+                          isSelected
+                            ? 'bg-[#001D39] text-[#7BBDE8] border-[#001D39] shadow-sm'
+                            : 'bg-[#EAF2F8] text-[#001D39] border-[#BDD8E9] hover:bg-[#BDD8E9]'
+                        }`}
+                      >
+                        {isSelected && <Check className="w-3 h-3 text-[#7BBDE8]" />}
+                        <span>{comp.nombre} ({comp.nit})</span>
+                      </button>
+                    );
+                  })}
                 </div>
-              )}
+              </div>
+            )}
+
+            {/* Active Company Inputs */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+              <div className="space-y-1">
+                <label className="block text-[11px] font-bold text-[#001D39] uppercase">
+                  NIT de tu Empresa (Comprador):
+                </label>
+                <input
+                  type="text"
+                  value={buyerNit}
+                  onChange={(e) => handleBuyerNitChange(e.target.value)}
+                  placeholder="Ej. 901584216"
+                  className="w-full bg-[#EAF2F8]/60 border border-[#BDD8E9] rounded-xl px-3 py-2 text-xs text-[#001D39] font-bold focus:outline-none focus:border-[#0A4174] focus:bg-white transition-all"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="block text-[11px] font-bold text-[#001D39] uppercase">
+                  Razón Social / Nombre:
+                </label>
+                <input
+                  type="text"
+                  value={buyerName}
+                  onChange={(e) => handleBuyerNameChange(e.target.value)}
+                  placeholder="Ej. DISTRIBUIDORA AHORRA MAX SAS"
+                  className="w-full bg-[#EAF2F8]/60 border border-[#BDD8E9] rounded-xl px-3 py-2 text-xs text-[#001D39] font-bold focus:outline-none focus:border-[#0A4174] focus:bg-white transition-all"
+                />
+              </div>
+            </div>
+
+            <div className="flex justify-end pt-1">
+              <button
+                type="button"
+                onClick={handleSaveCurrentCompany}
+                className="text-[11px] bg-[#EAF2F8] hover:bg-[#BDD8E9] text-[#0A4174] font-extrabold px-3 py-1.5 rounded-lg border border-[#BDD8E9] flex items-center gap-1.5 transition-all"
+              >
+                <BookmarkCheck className="w-3.5 h-3.5" />
+                <span>Guardar esta Empresa en mi lista</span>
+              </button>
             </div>
           </div>
 
-          <div className="pt-2">
-            <button
-              onClick={() => processInvoice()}
-              disabled={!selectedFile || isProcessing}
-              className="w-full bg-[#001D39] hover:bg-[#0A4174] disabled:opacity-40 disabled:cursor-not-allowed text-white font-bold py-3.5 px-4 rounded-xl shadow-md hover:shadow-lg transition-all flex items-center justify-center gap-2 text-sm"
-            >
-              <Sparkles className="w-4 h-4 text-[#7BBDE8]" />
-              <span>{isProcessing ? 'Procesando Documento...' : 'Procesar Factura'}</span>
-            </button>
+          {/* Upload Card */}
+          <div className="bg-white border border-[#BDD8E9] rounded-2xl p-6 shadow-md hover:shadow-lg transition-all space-y-6 flex flex-col justify-between">
+            <div className="space-y-4">
+              <div className="flex items-center justify-between border-b border-[#EAF2F8] pb-3">
+                <h2 className="text-sm font-extrabold text-[#001D39] flex items-center gap-2 uppercase tracking-wider">
+                  <FileCheck2 className="w-4 h-4 text-[#0A4174]" />
+                  Factura de Proveedor
+                </h2>
+              </div>
+
+              <div
+                onDragOver={(e) => e.preventDefault()}
+                onDrop={handleDrop}
+                onClick={() => fileInputRef.current?.click()}
+                className="border-2 border-dashed border-[#49769F]/40 hover:border-[#0A4174] bg-[#EAF2F8]/50 hover:bg-[#EAF2F8] transition-all rounded-2xl p-8 text-center cursor-pointer relative group"
+              >
+                <input
+                  type="file"
+                  ref={fileInputRef}
+                  accept="image/*"
+                  className="hidden"
+                  onChange={(e) => e.target.files?.[0] && handleFileSelect(e.target.files[0])}
+                />
+                <div className="w-14 h-14 bg-white border border-[#BDD8E9] rounded-full flex items-center justify-center mx-auto mb-3 text-[#0A4174] shadow-sm group-hover:scale-110 transition-transform">
+                  <UploadCloud className="w-7 h-7 text-[#0A4174]" />
+                </div>
+                <h3 className="font-bold text-sm text-[#001D39]">Arrastra la imagen de la factura</h3>
+                <p className="text-xs text-[#49769F] mt-1">o <span className="text-[#0A4174] font-bold underline">explora tus archivos</span> (.jpg, .png)</p>
+                
+                {selectedFile && (
+                  <div className="mt-4 inline-flex items-center gap-2 bg-[#001D39] text-[#7BBDE8] px-3.5 py-1.5 rounded-xl text-xs font-semibold shadow">
+                    <FileText className="w-4 h-4" />
+                    <span>{selectedFile.name}</span>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div className="pt-2">
+              <button
+                onClick={() => processInvoice()}
+                disabled={!selectedFile || isProcessing}
+                className="w-full bg-[#001D39] hover:bg-[#0A4174] disabled:opacity-40 disabled:cursor-not-allowed text-white font-bold py-3.5 px-4 rounded-xl shadow-md hover:shadow-lg transition-all flex items-center justify-center gap-2 text-sm"
+              >
+                <Sparkles className="w-4 h-4 text-[#7BBDE8]" />
+                <span>{isProcessing ? 'Procesando Documento...' : 'Procesar Factura para Siigo'}</span>
+              </button>
+            </div>
           </div>
         </section>
 
@@ -418,7 +832,7 @@ export default function MinimarketPOSPage() {
             <div className="absolute inset-0 bg-[#001D39]/85 backdrop-blur-sm border border-[#49769F] rounded-2xl z-40 flex flex-col items-center justify-center gap-4 text-white shadow-2xl">
               <div className="w-14 h-14 border-4 border-[#BDD8E9]/30 border-t-[#7BBDE8] rounded-full animate-spin flex items-center justify-center">
               </div>
-              <h3 className="font-bold text-base">Extrayendo Datos y Generando Paquete .ZIP...</h3>
+              <h3 className="font-bold text-base">Extrayendo Datos y Vinculando con {buyerName}...</h3>
               <p className="text-xs text-[#BDD8E9]">Analizando automáticamente encabezados, productos e integrando formato UBL 2.1...</p>
             </div>
           )}
@@ -433,11 +847,13 @@ export default function MinimarketPOSPage() {
             <>
               {/* Export Buttons Bar for Siigo */}
               <div className="bg-gradient-to-r from-[#001D39] to-[#0A4174] border border-[#49769F]/40 rounded-2xl p-5 shadow-lg text-white space-y-3">
-                <div className="flex items-center gap-3 border-b border-white/10 pb-3">
-                  <FileArchive className="w-6 h-6 text-[#7BBDE8]" />
-                  <div>
-                    <h3 className="font-bold text-sm">Archivos para Carga en Siigo Nube</h3>
-                    <p className="text-[11px] text-[#BDD8E9]">Selecciona la opción requerida según tu módulo de Siigo</p>
+                <div className="flex items-center justify-between border-b border-white/10 pb-3 flex-wrap gap-2">
+                  <div className="flex items-center gap-3">
+                    <FileArchive className="w-6 h-6 text-[#7BBDE8]" />
+                    <div>
+                      <h3 className="font-bold text-sm">Archivos para Carga en Siigo Nube</h3>
+                      <p className="text-[11px] text-[#BDD8E9]">Empresa: <strong className="text-white">{buyerName} ({buyerNit})</strong></p>
+                    </div>
                   </div>
                 </div>
 
@@ -462,7 +878,7 @@ export default function MinimarketPOSPage() {
 
               {/* Header Metrics Summary */}
               <div className="bg-white border border-[#BDD8E9] rounded-2xl p-6 shadow-md space-y-4">
-                <div className="border-b border-[#EAF2F8] pb-3">
+                <div className="border-b border-[#EAF2F8] pb-3 flex items-center justify-between">
                   <h2 className="text-sm font-extrabold text-[#001D39] uppercase tracking-wider flex items-center gap-2">
                     <Layers className="w-4 h-4 text-[#0A4174]" />
                     Encabezado de Compra
@@ -473,6 +889,9 @@ export default function MinimarketPOSPage() {
                   <div className="bg-[#EAF2F8] border border-[#BDD8E9] rounded-xl p-3">
                     <span className="block text-[11px] font-bold text-[#49769F] uppercase">NIT Proveedor</span>
                     <span className="text-sm font-extrabold text-[#001D39] block mt-0.5">{fields.NIT}</span>
+                    {fields.NombreProveedor && (
+                      <span className="text-[10px] text-[#49769F] font-semibold block truncate mt-0.5">{fields.NombreProveedor}</span>
+                    )}
                   </div>
 
                   <div className="bg-[#EAF2F8] border border-[#BDD8E9] rounded-xl p-3">
@@ -551,6 +970,7 @@ export default function MinimarketPOSPage() {
                     <h2 className="text-sm font-extrabold text-[#001D39] uppercase tracking-wider">
                       Estructura XML DIAN UBL 2.1
                     </h2>
+                    <p className="text-[11px] text-[#49769F]">Adquirente configurado: <strong className="text-[#001D39]">{buyerName} ({buyerNit})</strong></p>
                   </div>
                   <div className="flex gap-2">
                     <button

@@ -12,7 +12,9 @@ interface ProductoItem {
 
 interface FacturaDatos {
   NIT: string;
+  NombreProveedor?: string;
   BuyerNIT?: string;
+  BuyerName?: string;
   Fecha: string;
   Subtotal: string;
   IVA: string;
@@ -49,8 +51,8 @@ const MINIMAL_PDF_BASE64 = (
   'ZSA2L1Jvb3QgMSAwIFI+PgpzdGFydHhyZWYKNDIxCiUlRU9G'
 );
 
-// Genera la estructura idéntica requerida por Siigo Nube basándonos en el archivo de muestra oficial
-async function generarEstructuraSiigoIdentica(datos: FacturaDatos): Promise<{
+// Genera la estructura XML UBL 2.1 oficial para Siigo Nube adaptada para cualquier Empresa Compradora
+export async function generarEstructuraSiigoIdentica(datos: FacturaDatos): Promise<{
   attachedXml: string;
   invoiceXml: string;
   zipFilename: string;
@@ -60,8 +62,12 @@ async function generarEstructuraSiigoIdentica(datos: FacturaDatos): Promise<{
 }> {
   const nitProvRaw = (datos.NIT || '822007117').replace(/[^0-9]/g, '');
   const nitProvPadded = nitProvRaw.padStart(10, '0');
+  const provNameEscaped = escapeXml(datos.NombreProveedor || `PROVEEDOR ${nitProvRaw}`);
+
+  // NIT y Nombre de la empresa compradora en Siigo
   const nitBuyerRaw = (datos.BuyerNIT || '901584216').replace(/[^0-9]/g, '');
   const nitBuyer = nitBuyerRaw || '901584216';
+  const buyerNameEscaped = escapeXml(datos.BuyerName || 'MI EMPRESA SAS');
 
   const fecha = datos.Fecha || new Date().toISOString().split('T')[0];
   const numFactura = `FE-${Math.floor(10000 + Math.random() * 90000)}`;
@@ -70,7 +76,7 @@ async function generarEstructuraSiigoIdentica(datos: FacturaDatos): Promise<{
   const cufeSha384 = Array.from({ length: 96 }, () => Math.floor(Math.random() * 16).toString(16)).join('');
   const cudeSha384 = Array.from({ length: 96 }, () => Math.floor(Math.random() * 16).toString(16)).join('');
 
-  // Clave de 27 caracteres idéntica al estándar DIAN VPFE (08 + NIT_PROV_10 + sufijo_15)
+  // Clave de 27 caracteres estandar DIAN VPFE (08 + NIT_PROV_10 + sufijo_15)
   const key27 = `08${nitProvPadded}04720260000x39efe`.substring(0, 27);
   const zipFilename = `z${key27}.zip`;
   const xmlFilenameInside = `ad${key27}.xml`;
@@ -124,8 +130,6 @@ async function generarEstructuraSiigoIdentica(datos: FacturaDatos): Promise<{
     </cac:InvoiceLine>`;
   }).join('\n');
 
-  const provNameEscaped = escapeXml(`PROVEEDOR ${nitProvRaw}`);
-
   const invoiceXml = `<?xml version="1.0" encoding="UTF-8"?>
 <Invoice xmlns:cac="urn:oasis:names:specification:ubl:schema:xsd:CommonAggregateComponents-2"
          xmlns:cbc="urn:oasis:names:specification:ubl:schema:xsd:CommonBasicComponents-2"
@@ -172,10 +176,10 @@ async function generarEstructuraSiigoIdentica(datos: FacturaDatos): Promise<{
         <cbc:ID schemeAgencyID="195" schemeName="31" schemeID="8">${nitBuyer}</cbc:ID>
       </cac:PartyIdentification>
       <cac:PartyName>
-        <cbc:Name>MINIMARKET POS</cbc:Name>
+        <cbc:Name>${buyerNameEscaped}</cbc:Name>
       </cac:PartyName>
       <cac:PartyTaxScheme>
-        <cbc:RegistrationName>MINIMARKET POS</cbc:RegistrationName>
+        <cbc:RegistrationName>${buyerNameEscaped}</cbc:RegistrationName>
         <cbc:CompanyID schemeAgencyID="195" schemeAgencyName="CO, DIAN (Dirección de Impuestos y Aduanas Nacionales)" schemeName="31" schemeID="8">${nitBuyer}</cbc:CompanyID>
         <cbc:TaxLevelCode>R-99-PN</cbc:TaxLevelCode>
         <cac:TaxScheme>
@@ -184,7 +188,7 @@ async function generarEstructuraSiigoIdentica(datos: FacturaDatos): Promise<{
         </cac:TaxScheme>
       </cac:PartyTaxScheme>
       <cac:PartyLegalEntity>
-        <cbc:RegistrationName>MINIMARKET POS</cbc:RegistrationName>
+        <cbc:RegistrationName>${buyerNameEscaped}</cbc:RegistrationName>
         <cbc:CompanyID schemeAgencyID="195" schemeAgencyName="CO, DIAN (Dirección de Impuestos y Aduanas Nacionales)" schemeName="31" schemeID="8">${nitBuyer}</cbc:CompanyID>
       </cac:PartyLegalEntity>
     </cac:Party>
@@ -241,7 +245,7 @@ ${productosXmlLines}
   </cac:SenderParty>
   <cac:ReceiverParty>
     <cac:PartyTaxScheme>
-      <cbc:RegistrationName>MINIMARKET POS</cbc:RegistrationName>
+      <cbc:RegistrationName>${buyerNameEscaped}</cbc:RegistrationName>
       <cbc:CompanyID schemeAgencyID="195" schemeAgencyName="CO, DIAN (Dirección de Impuestos y Aduanas Nacionales)" schemeName="31" schemeID="8">${nitBuyer}</cbc:CompanyID>
       <cbc:TaxLevelCode>R-99-PN</cbc:TaxLevelCode>
       <cac:TaxScheme>
@@ -291,6 +295,7 @@ export async function POST(req: NextRequest) {
     const geminiApiKeyInput = formData.get('gemini_api_key') as string | null;
     const customModelInput = formData.get('gemini_model') as string | null;
     const buyerNitInput = formData.get('buyer_nit') as string | null;
+    const buyerNameInput = formData.get('buyer_name') as string | null;
 
     if (!file) {
       return NextResponse.json({ success: false, detail: 'No se envió ningún archivo de imagen.' }, { status: 400 });
@@ -318,11 +323,14 @@ export async function POST(req: NextRequest) {
     const modelsToTry = Array.from(new Set([preferredModel, 'gemini-3.5-flash', 'gemini-2.0-flash', 'gemini-1.5-flash']));
 
     const prompt = (
-      "Eres un experto contable especializado en software Siigo y ERPs comerciales. " +
-      "Analiza detalladamente esta foto de factura de compra de minimarket. " +
-      "Extrae los datos generales (NIT del proveedor, Fecha de emisión, Subtotal, IVA, Total) Y ADEMÁS extrae la lista completa de ítems o productos detallados. " +
-      "Para cada producto en la lista, extrae: cantidad, descripcion (nombre del producto), precio_unitario y total_item. " +
-      "Devuelve un formato JSON estricto con los campos: NIT, Fecha, Subtotal, IVA, Total, TextoExtraido y un arreglo Productos."
+      "Eres un experto contable especializado en software Siigo y facturación electrónica de la DIAN en Colombia. " +
+      "Analiza detalladamente esta foto de factura de compra. " +
+      "Extrae con total precisión: " +
+      "1. Datos del Proveedor/Emisor: NIT_Proveedor (solo dígitos) y Nombre_Proveedor (Razón Social del vendedor). " +
+      "2. Datos de la Empresa Compradora/Adquirente/Cliente (quien compra o a quien facturan): NIT_Comprador (solo dígitos) y Nombre_Comprador (Razón Social o nombre del cliente/comprador si figura en la factura). " +
+      "3. Datos Generales: Fecha de emisión (YYYY-MM-DD), Subtotal, IVA, Total. " +
+      "4. Lista detallada de Productos (arreglo Productos con: cantidad, descripcion, precio_unitario, total_item). " +
+      "Devuelve un formato JSON estricto con los campos: NIT, NombreProveedor, NIT_Comprador, NombreComprador, Fecha, Subtotal, IVA, Total, TextoExtraido y un arreglo Productos."
     );
 
     let response = null;
@@ -348,6 +356,9 @@ export async function POST(req: NextRequest) {
               type: Type.OBJECT,
               properties: {
                 NIT: { type: Type.STRING },
+                NombreProveedor: { type: Type.STRING },
+                NIT_Comprador: { type: Type.STRING },
+                NombreComprador: { type: Type.STRING },
                 Fecha: { type: Type.STRING },
                 Subtotal: { type: Type.STRING },
                 IVA: { type: Type.STRING },
@@ -387,9 +398,14 @@ export async function POST(req: NextRequest) {
     const responseText = response.text || '{}';
     const datosJson = JSON.parse(responseText);
 
+    const detectedBuyerNit = datosJson.NIT_Comprador || buyerNitInput || '901584216';
+    const detectedBuyerName = datosJson.NombreComprador || buyerNameInput || 'MI EMPRESA SAS';
+
     const fields: FacturaDatos = {
       NIT: datosJson.NIT || 'N/A',
-      BuyerNIT: buyerNitInput || '901584216',
+      NombreProveedor: datosJson.NombreProveedor || `PROVEEDOR ${datosJson.NIT || ''}`,
+      BuyerNIT: buyerNitInput || detectedBuyerNit,
+      BuyerName: buyerNameInput || detectedBuyerName,
       Fecha: datosJson.Fecha || 'N/A',
       Subtotal: datosJson.Subtotal || 'N/A',
       IVA: datosJson.IVA || 'N/A',
@@ -429,6 +445,9 @@ export async function POST(req: NextRequest) {
       guardado_en_supabase: guardadoEnSupabase,
       raw_text: rawText,
       fields,
+      buyer_nit: fields.BuyerNIT,
+      buyer_name: fields.BuyerName,
+      nombre_proveedor: fields.NombreProveedor,
       productos: fields.Productos,
       imagen_original_b64: imageOriginalB64,
       xml_content: est.attachedXml,
