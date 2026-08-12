@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { Store } from 'lucide-react';
+import { Receipt } from 'lucide-react';
 import { optimizeInvoiceImage } from '@/lib/image-optimizer';
 import {
   generarEstructuraSiigo,
@@ -20,27 +20,36 @@ import {
   ProcesarApiResponse,
 } from '@/types/invoice';
 
+import { AppSidebar } from '@/components/layout/AppSidebar';
+import { AppHeader } from '@/components/layout/AppHeader';
+import { DashboardStats } from '@/components/dashboard/DashboardStats';
+import { CompanyModal } from '@/components/company/CompanyModal';
+import { InvoiceUploader } from '@/components/invoice/InvoiceUploader';
+import { ProcessingStatus } from '@/components/invoice/ProcessingStatus';
+import { InvoiceDetailCard } from '@/components/invoice/InvoiceDetailCard';
+import { InvoiceProductTable } from '@/components/invoice/InvoiceProductTable';
+import { HistoryTable } from '@/components/history/HistoryTable';
 import { ToastNotification } from '@/components/ToastNotification';
-import { CompanySelector } from '@/components/CompanySelector';
-import { UploadDropzone } from '@/components/UploadDropzone';
-import { ProcessingStatus } from '@/components/ProcessingStatus';
-import { InvoiceSummary } from '@/components/InvoiceSummary';
-import { ProductTable } from '@/components/ProductTable';
-import { InvoiceHistory } from '@/components/InvoiceHistory';
 
 export default function MinimarketPOSPage() {
-  // Estado de Archivo y Optimización
+  // Navigation & Theme State
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'uploader' | 'history'>('dashboard');
+  const [isMobileNavOpen, setIsMobileNavOpen] = useState(false);
+  const [isCompanyModalOpen, setIsCompanyModalOpen] = useState(false);
+  const [isDark, setIsDark] = useState(false);
+
+  // File & Optimization State
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string>('');
   const [optimizationStats, setOptimizationStats] = useState<ImageOptimizationStats | null>(null);
   const [isProcessing, setIsProcessing] = useState<boolean>(false);
 
-  // Estado Multi-Empresa
+  // Multi-Company State
   const [buyerNit, setBuyerNit] = useState<string>('');
   const [buyerName, setBuyerName] = useState<string>('');
   const [savedCompanies, setSavedCompanies] = useState<EmpresaGuardada[]>([]);
 
-  // Estado de Factura Procesada
+  // Processed Invoice State
   const [fields, setFields] = useState<FacturaDatos | null>(null);
   const [productos, setProductos] = useState<ProductoItem[]>([]);
   const [rawText, setRawText] = useState<string>('');
@@ -50,12 +59,12 @@ export default function MinimarketPOSPage() {
   const [pdfFilenameInside, setPdfFilenameInside] = useState<string>('');
   const [duplicateNotice, setDuplicateNotice] = useState<DuplicateNotice | null>(null);
 
-  // Estado de Historial
+  // History State
   const [history, setHistory] = useState<SupabaseInvoice[]>([]);
   const [selectedInvoiceIds, setSelectedInvoiceIds] = useState<string[]>([]);
   const [isDeleting, setIsDeleting] = useState<boolean>(false);
 
-  // Alertas / Toasts
+  // Toast Notifications
   const [toast, setToast] = useState<ToastType | null>(null);
 
   const showToast = (message: string, type: 'success' | 'error' | 'warning' = 'success') => {
@@ -63,7 +72,35 @@ export default function MinimarketPOSPage() {
     setTimeout(() => setToast(null), 3500);
   };
 
-  // Cargar empresas guardadas de localStorage al iniciar
+  // Sync Dark Theme
+  useEffect(() => {
+    try {
+      const storedTheme = localStorage.getItem('theme');
+      if (storedTheme === 'dark' || (!storedTheme && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+        setIsDark(true);
+        document.documentElement.classList.add('dark');
+      } else {
+        setIsDark(false);
+        document.documentElement.classList.remove('dark');
+      }
+    } catch (e) {
+      console.warn('Error syncing theme:', e);
+    }
+  }, []);
+
+  const toggleTheme = () => {
+    const nextDark = !isDark;
+    setIsDark(nextDark);
+    if (nextDark) {
+      document.documentElement.classList.add('dark');
+      localStorage.setItem('theme', 'dark');
+    } else {
+      document.documentElement.classList.remove('dark');
+      localStorage.setItem('theme', 'light');
+    }
+  };
+
+  // Load Saved Companies from localStorage
   useEffect(() => {
     try {
       const saved = localStorage.getItem('siigo_saved_companies');
@@ -86,7 +123,7 @@ export default function MinimarketPOSPage() {
     }
   }, []);
 
-  // Cargar historial de Supabase
+  // Load History from Supabase
   const loadHistory = async (targetBuyerNit?: string) => {
     try {
       const nitToFilter = (targetBuyerNit !== undefined ? targetBuyerNit : buyerNit).trim();
@@ -110,7 +147,7 @@ export default function MinimarketPOSPage() {
     }
   }, [buyerNit]);
 
-  // Manejo de Selección de Archivo con Optimización Inteligente
+  // Handle File Selection with Client Canvas Compression
   const handleFileSelect = async (file: File) => {
     if (!file.type.startsWith('image/')) {
       showToast('Por favor selecciona un archivo de imagen válido (JPG, PNG, WebP)', 'error');
@@ -118,7 +155,7 @@ export default function MinimarketPOSPage() {
     }
 
     try {
-      showToast('Optimizando imagen...', 'warning');
+      showToast('Optimizando imagen para OCR...', 'warning');
       const optResult = await optimizeInvoiceImage(file, 1800, 0.84);
 
       setSelectedFile(optResult.file);
@@ -139,7 +176,7 @@ export default function MinimarketPOSPage() {
     }
   };
 
-  // Procesar Factura (Llamada al Endpoint con Idempotencia)
+  // Process Invoice (Post to Backend with Idempotency)
   const processInvoice = async () => {
     if (!selectedFile || isProcessing) return;
 
@@ -215,7 +252,7 @@ export default function MinimarketPOSPage() {
     }
   };
 
-  // Descargar XML desde el Historial bajo demanda
+  // Download XML On-Demand from History
   const downloadHistoryXml = async (invoiceId: string, nit: string) => {
     try {
       showToast('Recuperando XML de la factura...', 'warning');
@@ -234,23 +271,18 @@ export default function MinimarketPOSPage() {
     }
   };
 
-  // Guardar y Eliminar Empresas
-  const saveCurrentCompany = () => {
-    const nit = buyerNit.trim().replace(/[^0-9]/g, '');
-    const nombre = buyerName.trim();
-    if (!nit || !nombre) {
-      showToast('Por favor completa tanto el NIT como la Razón Social', 'warning');
-      return;
-    }
+  // Company Actions
+  const handleSaveCompany = (nit: string, name: string) => {
     const updated = savedCompanies.filter((c) => c.nit !== nit);
-    updated.unshift({ nit, nombre });
+    updated.unshift({ nit, nombre: name });
     setSavedCompanies(updated);
+    setBuyerNit(nit);
+    setBuyerName(name);
     localStorage.setItem('siigo_saved_companies', JSON.stringify(updated));
-    showToast(`Empresa "${nombre}" guardada`, 'success');
+    showToast(`Empresa "${name}" guardada y activada`, 'success');
   };
 
-  const deleteSavedCompany = (nit: string, e: React.MouseEvent) => {
-    e.stopPropagation();
+  const handleDeleteCompany = (nit: string) => {
     const updated = savedCompanies.filter((c) => c.nit !== nit);
     setSavedCompanies(updated);
     localStorage.setItem('siigo_saved_companies', JSON.stringify(updated));
@@ -261,7 +293,7 @@ export default function MinimarketPOSPage() {
     showToast('Empresa eliminada de la lista', 'warning');
   };
 
-  // Eliminación de Facturas
+  // Batch Delete Actions
   const handleDeleteSelected = async (targetIds?: string[]) => {
     const idsToDelete = targetIds || selectedInvoiceIds;
     if (idsToDelete.length === 0) {
@@ -298,138 +330,185 @@ export default function MinimarketPOSPage() {
     }
   };
 
+  const getPageHeaderInfo = () => {
+    switch (activeTab) {
+      case 'uploader':
+        return {
+          title: 'Analizador de Facturas con IA',
+          subtitle: 'Carga una factura para extraer datos contables y generar el paquete UBL 2.1',
+        };
+      case 'history':
+        return {
+          title: 'Historial de Compras Integradas',
+          subtitle: `Gestión y exportación de facturas electrónicas para NIT ${buyerNit || 'Empresa'}`,
+        };
+      case 'dashboard':
+      default:
+        return {
+          title: 'Panel de Control Contable',
+          subtitle: 'Resumen financiero, métricas de compras e integración con Siigo Nube',
+        };
+    }
+  };
+
+  const headerInfo = getPageHeaderInfo();
+
   return (
-    <main className="min-h-screen bg-[#F5F9FC] text-[#001D39] p-4 md:p-8 font-sans">
-      <div className="max-w-7xl mx-auto space-y-6">
-        {/* Header Bar */}
-        <header className="bg-gradient-to-r from-[#001D39] to-[#0A4174] border border-[#0A4174] rounded-2xl p-6 shadow-lg text-white">
-          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-            <div className="flex items-center gap-3.5">
-              <div className="p-3 bg-white/10 rounded-2xl border border-white/20 shadow-inner">
-                <Store className="w-8 h-8 text-[#7BBDE8]" />
-              </div>
-              <div>
-                <div className="flex items-center gap-2">
-                  <h1 className="text-xl md:text-2xl font-black tracking-tight">Analizador de Facturas</h1>
-                  <span className="text-[10px] uppercase font-bold tracking-wider bg-[#7BBDE8] text-[#001D39] px-2 py-0.5 rounded-full shadow-sm">
-                    UBL 2.1 Siigo
-                  </span>
-                </div>
-                <p className="text-xs text-[#BDD8E9] mt-0.5">
-                  Extracción con Google Gemini AI, generación de ZIP/XML UBL 2.1 e integración multi-empresa
-                </p>
-              </div>
-            </div>
+    <div className="min-h-screen bg-background flex flex-col lg:flex-row text-foreground antialiased transition-colors duration-200">
+      {/* SaaS Sidebar */}
+      <AppSidebar
+        activeTab={activeTab}
+        onTabChange={setActiveTab}
+        activeBuyerName={buyerName}
+        activeBuyerNit={buyerNit}
+        onOpenCompanyModal={() => setIsCompanyModalOpen(true)}
+        isDark={isDark}
+        onToggleTheme={toggleTheme}
+        isMobileOpen={isMobileNavOpen}
+        onCloseMobile={() => setIsMobileNavOpen(false)}
+      />
 
-            <div className="flex items-center gap-3">
-              <div className="bg-white/10 border border-white/20 px-3.5 py-2 rounded-xl text-right">
-                <span className="block text-[10px] text-[#BDD8E9] uppercase font-bold">Empresa Activa</span>
-                <span className="font-bold text-xs text-white truncate max-w-[180px] inline-block">
-                  {buyerName || 'MI EMPRESA'}
-                </span>
-              </div>
-            </div>
-          </div>
-        </header>
-
-        {/* Top Section: Multi-Company Configuration */}
-        <CompanySelector
-          buyerNit={buyerNit}
-          buyerName={buyerName}
-          savedCompanies={savedCompanies}
-          onBuyerNitChange={setBuyerNit}
-          onBuyerNameChange={setBuyerName}
-          onSaveCompany={saveCurrentCompany}
-          onSelectCompany={(comp) => {
-            setBuyerNit(comp.nit);
-            setBuyerName(comp.nombre);
-            showToast(`Empresa seleccionada: ${comp.nombre}`, 'success');
-          }}
-          onDeleteCompany={deleteSavedCompany}
+      {/* Main Workspace */}
+      <div className="flex-1 lg:pl-72 flex flex-col min-w-0">
+        {/* Sticky Header */}
+        <AppHeader
+          title={headerInfo.title}
+          subtitle={headerInfo.subtitle}
+          activeBuyerName={buyerName}
+          activeBuyerNit={buyerNit}
+          onOpenCompanyModal={() => setIsCompanyModalOpen(true)}
+          onOpenUploader={() => setActiveTab('uploader')}
+          isDark={isDark}
+          onToggleTheme={toggleTheme}
+          onOpenMobileNav={() => setIsMobileNavOpen(true)}
         />
 
-        {/* Main Processing Grid */}
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-          {/* Left Column: Upload Dropzone */}
-          <div className="lg:col-span-5 space-y-6">
-            <UploadDropzone
-              selectedFile={selectedFile}
-              previewUrl={previewUrl}
-              isProcessing={isProcessing}
-              optimizationStats={optimizationStats}
-              onFileSelect={handleFileSelect}
-              onProcessInvoice={processInvoice}
-            />
-          </div>
+        {/* Dynamic Page Content */}
+        <main className="flex-1 p-4 sm:p-6 lg:p-8 space-y-6 max-w-7xl w-full mx-auto animate-fade-in">
+          {/* Top KPI Metrics (Always visible or in Dashboard) */}
+          <DashboardStats history={history} activeBuyerName={buyerName} />
 
-          {/* Right Column: Extracted Results & Tables */}
-          <section className="lg:col-span-7 space-y-6 relative">
-            <ProcessingStatus
-              isProcessing={isProcessing}
-              buyerNit={buyerNit}
-              duplicateNotice={duplicateNotice}
-            />
+          {/* View: Dashboard or Uploader */}
+          {(activeTab === 'dashboard' || activeTab === 'uploader') && (
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+              {/* Left Column: Upload Dropzone */}
+              <div className="lg:col-span-5 space-y-6">
+                <InvoiceUploader
+                  selectedFile={selectedFile}
+                  previewUrl={previewUrl}
+                  isProcessing={isProcessing}
+                  optimizationStats={optimizationStats}
+                  onFileSelect={handleFileSelect}
+                  onClearFile={() => {
+                    setSelectedFile(null);
+                    setPreviewUrl('');
+                    setOptimizationStats(null);
+                  }}
+                  onProcessInvoice={processInvoice}
+                />
+              </div>
 
-            {fields && (
-              <>
-                <InvoiceSummary
-                  fields={fields}
-                  buyerName={buyerName}
+              {/* Right Column: Processing Status & Extracted Voucher */}
+              <div className="lg:col-span-7 space-y-6 relative">
+                <ProcessingStatus
+                  isProcessing={isProcessing}
                   buyerNit={buyerNit}
-                  zipFilename={zipFilename}
-                  onDownloadZip={() => {
-                    if (!fields || !xmlContent) return;
-                    downloadSiigoZipPackage(fields, xmlContent, zipFilename, xmlFilenameInside, pdfFilenameInside);
-                    showToast(`¡Paquete ${zipFilename} descargado!`, 'success');
-                  }}
-                  onDownloadXml={() => {
-                    downloadXmlBlob(xmlContent, xmlFilenameInside || 'factura_dian.xml');
-                    showToast('Archivo XML UBL 2.1 descargado', 'success');
-                  }}
-                  onCopyXml={() => {
-                    if (!xmlContent) return;
-                    navigator.clipboard.writeText(xmlContent);
-                    showToast('XML UBL 2.1 copiado al portapapeles', 'success');
-                  }}
-                  onDownloadCsv={() => {
-                    if (!fields) return;
-                    downloadSiigoCsvTemplate(fields, productos);
-                    showToast('Plantilla CSV para Siigo descargada', 'success');
-                  }}
+                  duplicateNotice={duplicateNotice}
                 />
 
-                <ProductTable productos={productos} />
-              </>
-            )}
-          </section>
-        </div>
+                {fields ? (
+                  <div className="space-y-6 animate-fade-in">
+                    <InvoiceDetailCard
+                      fields={fields}
+                      buyerName={buyerName}
+                      buyerNit={buyerNit}
+                      zipFilename={zipFilename}
+                      onDownloadZip={() => {
+                        if (!fields || !xmlContent) return;
+                        downloadSiigoZipPackage(fields, xmlContent, zipFilename, xmlFilenameInside, pdfFilenameInside);
+                        showToast(`¡Paquete ${zipFilename} descargado!`, 'success');
+                      }}
+                      onDownloadXml={() => {
+                        downloadXmlBlob(xmlContent, xmlFilenameInside || 'factura_dian.xml');
+                        showToast('Archivo XML UBL 2.1 descargado', 'success');
+                      }}
+                      onCopyXml={() => {
+                        if (!xmlContent) return;
+                        navigator.clipboard.writeText(xmlContent);
+                        showToast('XML UBL 2.1 copiado al portapapeles', 'success');
+                      }}
+                      onDownloadCsv={() => {
+                        if (!fields) return;
+                        downloadSiigoCsvTemplate(fields, productos);
+                        showToast('Plantilla CSV para Siigo descargada', 'success');
+                      }}
+                    />
 
-        {/* Bottom Section: Purchases History */}
-        <InvoiceHistory
-          history={history}
-          selectedInvoiceIds={selectedInvoiceIds}
-          isDeleting={isDeleting}
-          buyerNit={buyerNit}
-          onSelectAll={() => {
-            if (selectedInvoiceIds.length === history.length) {
-              setSelectedInvoiceIds([]);
-            } else {
-              setSelectedInvoiceIds(history.map((item) => item.id));
-            }
-          }}
-          onToggleSelect={(id) => {
-            setSelectedInvoiceIds((prev) =>
-              prev.includes(id) ? prev.filter((i) => i !== id) : [...prev, id]
-            );
-          }}
-          onDeleteSelected={handleDeleteSelected}
-          onRefreshHistory={() => loadHistory()}
-          onDownloadXml={downloadHistoryXml}
-        />
+                    <InvoiceProductTable productos={productos} />
+                  </div>
+                ) : (
+                  !isProcessing && (
+                    <div className="rounded-2xl border border-border/80 bg-card p-10 text-center shadow-xs">
+                      <div className="w-14 h-14 rounded-2xl bg-primary/10 text-primary flex items-center justify-center mx-auto mb-3">
+                        <Receipt className="w-7 h-7 opacity-80" />
+                      </div>
+                      <h3 className="text-base font-bold text-foreground mb-1">Sin Factura Procesada</h3>
+                      <p className="text-xs text-muted-foreground max-w-sm mx-auto">
+                        Carga o arrastra una imagen de factura en el panel izquierdo para extraer automáticamente los datos contables y generar el paquete .ZIP para Siigo Nube.
+                      </p>
+                    </div>
+                  )
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* View: History Table */}
+          {(activeTab === 'dashboard' || activeTab === 'history') && (
+            <div className="pt-2">
+              <HistoryTable
+                history={history}
+                selectedInvoiceIds={selectedInvoiceIds}
+                isDeleting={isDeleting}
+                buyerNit={buyerNit}
+                onSelectAll={() => {
+                  if (selectedInvoiceIds.length === history.length) {
+                    setSelectedInvoiceIds([]);
+                  } else {
+                    setSelectedInvoiceIds(history.map((item) => item.id));
+                  }
+                }}
+                onToggleSelect={(id) => {
+                  setSelectedInvoiceIds((prev) =>
+                    prev.includes(id) ? prev.filter((i) => i !== id) : [...prev, id]
+                  );
+                }}
+                onDeleteSelected={handleDeleteSelected}
+                onRefreshHistory={() => loadHistory()}
+                onDownloadXml={downloadHistoryXml}
+              />
+            </div>
+          )}
+        </main>
       </div>
 
-      {/* Toast Alert Notification */}
+      {/* Company Selector Modal */}
+      <CompanyModal
+        isOpen={isCompanyModalOpen}
+        onClose={() => setIsCompanyModalOpen(false)}
+        savedCompanies={savedCompanies}
+        activeBuyerNit={buyerNit}
+        onSelectCompany={(comp) => {
+          setBuyerNit(comp.nit);
+          setBuyerName(comp.nombre);
+          showToast(`Empresa activa: ${comp.nombre}`, 'success');
+        }}
+        onSaveNewCompany={handleSaveCompany}
+        onDeleteCompany={handleDeleteCompany}
+      />
+
+      {/* Floating Toast Notification */}
       <ToastNotification toast={toast} />
-    </main>
+    </div>
   );
 }

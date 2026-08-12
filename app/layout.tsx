@@ -5,16 +5,20 @@ import './globals.css';
 const jakarta = Plus_Jakarta_Sans({
   subsets: ['latin'],
   variable: '--font-sans',
+  weight: ['400', '500', '600', '700', '800'],
+  display: 'swap',
 });
 
 const mono = JetBrains_Mono({
   subsets: ['latin'],
   variable: '--font-mono',
+  weight: ['400', '500', '600', '700'],
+  display: 'swap',
 });
 
 export const metadata: Metadata = {
-  title: 'Sistema de Facturación & Inventario Minimarket POS',
-  description: 'Procesador Inteligente de Facturas con integración a Siigo ERP y Supabase.',
+  title: 'Analizador de Facturas | DIAN UBL 2.1 & Siigo Cloud',
+  description: 'Plataforma SaaS para extracción automática de facturas de compra con IA e integración contable con Siigo Nube.',
 };
 
 export default function RootLayout({
@@ -23,11 +27,9 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="es" className={`${jakarta.variable} ${mono.variable}`}>
-      <body className="bg-[#EAF2F8] text-[#001D39]">
-        <div className="max-w-7xl mx-auto p-4 sm:p-6 lg:p-8">
-          {children}
-        </div>
+    <html lang="es" className={`${jakarta.variable} ${mono.variable} transition-colors duration-200`} suppressHydrationWarning>
+      <body className="min-h-screen bg-background font-sans antialiased">
+        {children}
       </body>
     </html>
   );
