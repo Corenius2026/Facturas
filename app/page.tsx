@@ -83,17 +83,16 @@ function limpiarValorNumerico(strVal: string): number {
   return isNaN(num) ? 0 : num;
 }
 
-const VALID_PDF_BASE64 = (
-  'JVBERi0xLjQKJcFSWzENCjEgMCBvYmo8PC9UeXBlL0NhdGFsb2cvUGFnZXMgMiAwIFI+PmVuZG9iagoy' +
-  'IDAwYmo8PC9UeXBlL1BhZ2VzL0NvdW50IDEvS2lkc1szIDAgUl0+PmVuZG9iagozIDAgb2JqPDwvVHlw' +
-  'ZS9QYWdlL01lZGlhQm94WzAgMCA2MTIgNzkyXS9SZXNvdXJjZXM8PC9Gb250PDwvRjEgNCAwIFI+Pj4+' +
-  '/Q29udGVudHMgNSAwIFIvUGFyZW50IDIgMCBSPj5lbmRvYmoKNCAwIG9iajw8L1R5cGUvRm9udC9T' +
-  'dWJ0eXBlL1R5cGUxL0Jhc2VGb250L0hlbHZldGljYT4+ZW5kb2JqCjUgMCBvYmo8PC9MZW5ndGggNzg+' +
-  'PnN0cmVhbQpCVAovRjEgMTIgVGYKNzAgNzEwIFRkCihGYWN0dXJhIGRlIENvbXByYSAtIE1pbmltYXJr' +
-  'ZXQgUE9TKSBUagpFVAplbmRzdHJlYW0KZW5kb2JqCnhyZWYKMCA2CjAwMDAwMDAwMDAgNjU1MzUgZiAN' +
-  'CjAwMDAwMDAwMDkgMDAwMDAgbiANCjAwMDAwMDAwNTggMDAwMDAgbiANCjAwMDAwMDAxMTUgMDAwMDAg' +
-  'biANCjAwMDAwMDAyMjEgMDAwMDAgbiANCjAwMDAwMDAyOTIgMDAwMDAgbiANCnRyYWlsZXIKPDwvU2l6' +
-  'ZSA2L1Jvb3QgMSAwIFI+PgpzdGFydHhyZWYKNDIxCiUlRU9G'
+const PDF_CONTENT_STRING = (
+  '%PDF-1.4\n' +
+  '1 0 obj<</Type/Catalog/Pages 2 0 R>>endobj\n' +
+  '2 0 obj<</Type/Pages/Count 1/Kids[3 0 R]>>endobj\n' +
+  '3 0 obj<</Type/Page/MediaBox[0 0 612 792]/Resources<</Font<</F1 4 0 R>>>>/Contents 5 0 R/Parent 2 0 R>>endobj\n' +
+  '4 0 obj<</Type/Font/Subtype/Type1/BaseFont/Helvetica>>endobj\n' +
+  '5 0 obj<</Length 78>>stream\n' +
+  'BT\n/F1 12 Tf\n70 710 Td\n(Factura de Compra - DIAN Siigo) Tj\nET\nendstream\nendobj\n' +
+  'xref\n0 6\n0000000000 65535 f \n0000000009 00000 n \n0000000058 00000 n \n0000000115 00000 n \n0000000221 00000 n \n0000000292 00000 n \n' +
+  'trailer\n<</Size 6/Root 1 0 R>>\nstartxref\n421\n%%EOF'
 );
 
 function generarXmlSiigoClient(datos: InvoiceFields) {
@@ -574,12 +573,7 @@ export default function MinimarketPOSPage() {
       const targetXmlInside = est.xmlFilenameInside;
       const targetPdfInside = est.pdfFilenameInside;
 
-      const pdfBase64Clean = VALID_PDF_BASE64.replace(/[^A-Za-z0-9+/=]/g, '');
-      const pdfBinary = atob(pdfBase64Clean);
-      const pdfBytes = new Uint8Array(pdfBinary.length);
-      for (let i = 0; i < pdfBinary.length; i++) {
-        pdfBytes[i] = pdfBinary.charCodeAt(i);
-      }
+      const pdfBytes = new TextEncoder().encode(PDF_CONTENT_STRING);
 
       const zip = new JSZip();
       zip.file(targetXmlInside, est.attachedXml);
