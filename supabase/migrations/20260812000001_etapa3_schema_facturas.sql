@@ -122,6 +122,22 @@ EXCEPTION WHEN OTHERS THEN
 END;
 $$ LANGUAGE plpgsql IMMUTABLE;
 
+-- 1.1 Función sobrecargada para valores que ya son de tipo numeric
+CREATE OR REPLACE FUNCTION public.parse_colombian_currency_strict(val numeric)
+RETURNS numeric(14,2) AS $$
+BEGIN
+    RETURN val::numeric(14,2);
+END;
+$$ LANGUAGE plpgsql IMMUTABLE;
+
+-- 2.1 Función sobrecargada para valores que ya son de tipo date
+CREATE OR REPLACE FUNCTION public.parse_flexible_date_strict(val date)
+RETURNS date AS $$
+BEGIN
+    RETURN val;
+END;
+$$ LANGUAGE plpgsql IMMUTABLE;
+
 -- 3. Renombrar nit -> proveedor_nit y agregar nuevas columnas requeridas
 DO $$
 BEGIN
@@ -149,12 +165,12 @@ ALTER TABLE public.facturas
     ALTER COLUMN iva DROP DEFAULT,
     ALTER COLUMN total DROP DEFAULT;
 
--- 5. Conversión segura de tipos de datos a DATE y NUMERIC(14,2)
+-- 5. Conversión segura de tipos de datos a DATE y NUMERIC(14,2) con casteo explícito ::text
 ALTER TABLE public.facturas
-    ALTER COLUMN fecha TYPE DATE USING public.parse_flexible_date_strict(fecha),
-    ALTER COLUMN subtotal TYPE NUMERIC(14,2) USING public.parse_colombian_currency_strict(subtotal),
-    ALTER COLUMN iva TYPE NUMERIC(14,2) USING public.parse_colombian_currency_strict(iva),
-    ALTER COLUMN total TYPE NUMERIC(14,2) USING public.parse_colombian_currency_strict(total);
+    ALTER COLUMN fecha TYPE DATE USING public.parse_flexible_date_strict(fecha::text),
+    ALTER COLUMN subtotal TYPE NUMERIC(14,2) USING public.parse_colombian_currency_strict(subtotal::text),
+    ALTER COLUMN iva TYPE NUMERIC(14,2) USING public.parse_colombian_currency_strict(iva::text),
+    ALTER COLUMN total TYPE NUMERIC(14,2) USING public.parse_colombian_currency_strict(total::text);
 
 -- 6. Establecer los nuevos valores DEFAULT apropiados para tipos numéricos y fecha
 ALTER TABLE public.facturas
