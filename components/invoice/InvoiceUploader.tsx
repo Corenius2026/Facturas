@@ -53,8 +53,8 @@ export const InvoiceUploader: React.FC<InvoiceUploaderProps> = ({
         onClick={() => fileInputRef.current?.click()}
         className={`relative border-2 border-dashed rounded-xl p-8 text-center cursor-pointer transition-all duration-200 ${
           isDragOver
-            ? 'border-primary bg-primary/5'
-            : 'border-border/50 hover:border-primary/50 hover:bg-muted/30'
+            ? 'border-blue-500 bg-blue-50/50 dark:bg-blue-950/20'
+            : 'border-border/50 hover:border-blue-400/50 hover:bg-blue-50/30 dark:hover:bg-blue-950/10'
         }`}
       >
         <input
@@ -90,8 +90,8 @@ export const InvoiceUploader: React.FC<InvoiceUploaderProps> = ({
               </button>
             </div>
           ) : (
-            <div className="w-16 h-16 rounded-full bg-muted flex items-center justify-center mb-4">
-              <UploadCloud className="w-8 h-8 text-muted-foreground" />
+            <div className="w-16 h-16 rounded-full bg-blue-100 dark:bg-blue-900/40 text-blue-600 dark:text-blue-400 flex items-center justify-center mb-4 transition-transform group-hover:scale-110">
+              <UploadCloud className="w-8 h-8" />
             </div>
           )}
 
@@ -105,7 +105,7 @@ export const InvoiceUploader: React.FC<InvoiceUploaderProps> = ({
           )}
 
           {optimizationStats && optimizationStats.reductionPercentage > 0 && (
-            <div className="mt-4 flex items-center gap-1.5 text-xs text-muted-foreground">
+            <div className="mt-4 flex items-center gap-1.5 text-xs text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/30 px-3 py-1 rounded-full font-medium">
               <Zap className="w-3 h-3" />
               <span>Optimizada {optimizationStats.reductionPercentage}% antes de subir</span>
             </div>
@@ -117,12 +117,14 @@ export const InvoiceUploader: React.FC<InvoiceUploaderProps> = ({
       <Button
         onClick={onProcessInvoice}
         disabled={!selectedFile || isProcessing}
-        className="w-full h-12 text-base font-semibold"
+        className="w-full h-12 text-base font-bold bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white shadow-lg shadow-blue-500/25 transition-all border-0 gap-2"
         size="lg"
       >
-        {isProcessing ? 'Procesando...' : 'Analizar Factura'}
+        <Sparkles className="w-5 h-5" />
+        {isProcessing ? 'Procesando con IA...' : 'Analizar Factura'}
       </Button>
     </div>
   );
 };
+
 

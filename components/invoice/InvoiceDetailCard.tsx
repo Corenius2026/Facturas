@@ -39,10 +39,15 @@ export const InvoiceDetailCard: React.FC<InvoiceDetailCardProps> = ({
   return (
     <div className="border border-border rounded-xl bg-card overflow-hidden">
       {/* Header & Actions */}
-      <div className="p-6 border-b border-border flex flex-col md:flex-row md:items-center justify-between gap-6">
+      <div className="p-6 border-b border-border flex flex-col md:flex-row md:items-center justify-between gap-6 bg-slate-50/50 dark:bg-slate-900/20">
         <div>
-          <h3 className="text-xl font-bold tracking-tight text-foreground mb-1">Resultados de Factura</h3>
-          <p className="text-sm text-muted-foreground flex items-center gap-2">
+          <h3 className="text-xl font-bold tracking-tight text-foreground mb-1 flex items-center gap-2">
+            <span className="p-1.5 rounded-lg bg-indigo-100 dark:bg-indigo-900/50 text-indigo-600 dark:text-indigo-400">
+              <FileArchive className="w-5 h-5" />
+            </span>
+            Resultados de Factura
+          </h3>
+          <p className="text-sm text-muted-foreground flex items-center gap-2 pl-9">
             <span>UBL 2.1</span>
             <span>•</span>
             <span className="font-mono">{zipFilename || 'z08XXXXXXXX.zip'}</span>
@@ -52,7 +57,7 @@ export const InvoiceDetailCard: React.FC<InvoiceDetailCardProps> = ({
         <div className="flex flex-wrap gap-3">
           <Button
             onClick={onDownloadZip}
-            className="font-semibold gap-2"
+            className="font-semibold gap-2 bg-indigo-600 hover:bg-indigo-700 text-white"
           >
             <Download className="w-4 h-4" />
             <span>Descargar .ZIP Siigo</span>
@@ -130,9 +135,9 @@ export const InvoiceDetailCard: React.FC<InvoiceDetailCardProps> = ({
                 <span className="text-base font-semibold text-foreground">{formatMonetaryDisplay(fields.IVA)}</span>
               </div>
               <div className="h-px bg-border my-2"></div>
-              <div className="flex justify-between items-center">
-                <span className="text-base font-bold text-foreground">Total Factura</span>
-                <span className="text-2xl font-bold tracking-tight text-foreground">{formatMonetaryDisplay(fields.Total)}</span>
+              <div className="flex justify-between items-center p-4 rounded-xl bg-indigo-50/50 dark:bg-indigo-950/30 border border-indigo-100 dark:border-indigo-900/50">
+                <span className="text-base font-bold text-indigo-900 dark:text-indigo-200">Total Factura</span>
+                <span className="text-2xl font-black tracking-tight text-indigo-700 dark:text-indigo-400">{formatMonetaryDisplay(fields.Total)}</span>
               </div>
             </div>
           </div>
@@ -141,4 +146,5 @@ export const InvoiceDetailCard: React.FC<InvoiceDetailCardProps> = ({
     </div>
   );
 };
+
 
