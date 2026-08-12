@@ -60,13 +60,26 @@ interface EmpresaGuardada {
 
 interface SupabaseInvoice {
   id: string;
-  nit: string;
-  fecha: string;
-  subtotal: string;
-  iva: string;
-  total: string;
-  xml_content: string;
+  proveedor_nit?: string;
+  nit?: string;
+  proveedor_nombre?: string | null;
+  buyer_nit?: string;
+  buyer_name?: string | null;
+  numero_factura?: string | null;
+  fecha: string | null;
+  subtotal: number | string | null;
+  iva: number | string | null;
+  total: number | string | null;
+  productos?: ProductoItem[] | null;
+  estado?: string;
   creado_en: string;
+}
+
+function formatMonetaryDisplay(val: number | string | null | undefined): string {
+  if (val === null || val === undefined || val === 'N/A' || val === '') return 'N/A';
+  const num = typeof val === 'number' ? val : parseFloat(String(val).replace(/[^0-9.-]+/g, ''));
+  if (isNaN(num)) return String(val);
+  return `$ ${num.toLocaleString('es-CO', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`;
 }
 
 function escapeXml(unsafe: string): string {
@@ -1133,7 +1146,9 @@ export default function MinimarketPOSPage() {
                   </button>
                 </th>
                 <th className="p-3">Fecha</th>
-                <th className="p-3">Proveedor (NIT)</th>
+                <th className="p-3">N° Doc</th>
+                <th className="p-3">Proveedor</th>
+                <th className="p-3">Ítems</th>
                 <th className="p-3">Subtotal</th>
                 <th className="p-3">IVA</th>
                 <th className="p-3">TOTAL</th>
@@ -1143,13 +1158,14 @@ export default function MinimarketPOSPage() {
             <tbody className="divide-y divide-[#BDD8E9]/50">
               {history.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="p-6 text-center text-[#49769F]">
+                  <td colSpan={9} className="p-6 text-center text-[#49769F]">
                     Aún no hay compras registradas.
                   </td>
                 </tr>
               ) : (
                 history.map((item) => {
                   const isSelected = selectedInvoiceIds.includes(item.id);
+                  const provNit = item.proveedor_nit || item.nit || 'N/A';
                   return (
                     <tr
                       key={item.id}
@@ -1169,15 +1185,29 @@ export default function MinimarketPOSPage() {
                           )}
                         </button>
                       </td>
-                      <td className="p-3 font-semibold text-[#001D39]">{item.fecha}</td>
-                      <td className="p-3 font-extrabold text-[#0A4174]">{item.nit}</td>
-                      <td className="p-3 text-[#49769F] font-semibold">${item.subtotal}</td>
-                      <td className="p-3 text-[#49769F] font-semibold">${item.iva}</td>
-                      <td className="p-3 font-black text-[#001D39]">${item.total}</td>
+                      <td className="p-3 font-semibold text-[#001D39] whitespace-nowrap">{item.fecha || '-'}</td>
+                      <td className="p-3 font-bold text-[#0A4174] whitespace-nowrap">
+                        <span className="bg-[#EAF2F8] px-2 py-0.5 rounded text-[11px] font-mono">
+                          {item.numero_factura || 'S/N'}
+                        </span>
+                      </td>
+                      <td className="p-3">
+                        <div className="font-extrabold text-[#001D39]">{item.proveedor_nombre || `PROVEEDOR ${provNit}`}</div>
+                        <div className="text-[10px] text-[#49769F] font-semibold">NIT: {provNit}</div>
+                      </td>
+                      <td className="p-3 whitespace-nowrap">
+                        <span className="inline-flex items-center gap-1 bg-[#EAF2F8] text-[#0A4174] px-2 py-0.5 rounded-md font-bold text-[10px]">
+                          <Package className="w-3 h-3 text-[#49769F]" />
+                          {item.productos && item.productos.length > 0 ? `${item.productos.length} ítems` : '1 ítem'}
+                        </span>
+                      </td>
+                      <td className="p-3 text-[#49769F] font-semibold">{formatMonetaryDisplay(item.subtotal)}</td>
+                      <td className="p-3 text-[#49769F] font-semibold">{formatMonetaryDisplay(item.iva)}</td>
+                      <td className="p-3 font-black text-[#001D39] text-sm">{formatMonetaryDisplay(item.total)}</td>
                       <td className="p-3 text-right">
                         <div className="flex items-center justify-end gap-1.5">
                           <button
-                            onClick={() => downloadHistoryXml(item.id, item.nit)}
+                            onClick={() => downloadHistoryXml(item.id, provNit)}
                             className="bg-[#001D39] hover:bg-[#0A4174] text-white px-2.5 py-1 rounded-lg text-xs font-bold inline-flex items-center gap-1 transition-all shadow-sm"
                             title="Descargar XML"
                           >

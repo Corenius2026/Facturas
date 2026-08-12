@@ -41,7 +41,7 @@ export async function GET(req: NextRequest) {
 
       const { data, error } = await supabase
         .from('facturas')
-        .select('id, nit, xml_content')
+        .select('*')
         .eq('id', singleId.trim())
         .single();
 
@@ -52,32 +52,78 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({
         success: true,
         connected: true,
-        factura: data
+        factura: {
+          id: data.id,
+          nit: data.proveedor_nit || data.nit,
+          xml_content: data.xml_content
+        }
       });
     }
 
-    // 3. Consulta de Listado General Optimizado: NO incluye xml_content para reducir el payload en ~99%
+    // 3. Consulta de Listado General Optimizado (Etapa 3 con Fallback resiliente)
     let query = supabase
       .from('facturas')
-      .select('id, nit, fecha, subtotal, iva, total, texto_extraido, creado_en')
+      .select('id, proveedor_nit, proveedor_nombre, buyer_nit, buyer_name, numero_factura, fecha, subtotal, iva, total, productos, estado, creado_en')
       .order('creado_en', { ascending: false })
       .limit(100);
 
-    // Aislamiento Multi-Empresa: Filtrar exclusivamente las facturas de la empresa activa
     if (cleanBuyerNit) {
-      query = query.or(`texto_extraido.ilike.%[NIT_COMPRADOR:${cleanBuyerNit}]%,xml_content.ilike.%<cbc:CompanyID%>${cleanBuyerNit}</cbc:CompanyID>%`);
+      query = query.eq('buyer_nit', cleanBuyerNit);
     }
 
-    const { data, error } = await query;
+    let rawData: any[] | null = null;
+    let queryErr: any = null;
 
-    if (error) {
-      throw error;
+    const resPrimary = await query;
+    if (!resPrimary.error) {
+      rawData = resPrimary.data;
+    } else {
+      queryErr = resPrimary.error;
+      // Resiliencia retrocompatible si aún no se ejecutan los ALTER TABLE
+      let fallbackQuery = supabase
+        .from('facturas')
+        .select('id, nit, fecha, subtotal, iva, total, texto_extraido, creado_en')
+        .order('creado_en', { ascending: false })
+        .limit(100);
+
+      if (cleanBuyerNit) {
+        fallbackQuery = fallbackQuery.or(`texto_extraido.ilike.%[NIT_COMPRADOR:${cleanBuyerNit}]%,xml_content.ilike.%<cbc:CompanyID%>${cleanBuyerNit}</cbc:CompanyID>%`);
+      }
+
+      const fallbackRes = await fallbackQuery;
+      if (!fallbackRes.error) {
+        rawData = fallbackRes.data as any[];
+        queryErr = null;
+      } else {
+        queryErr = fallbackRes.error;
+      }
     }
+
+    if (queryErr) {
+      throw queryErr;
+    }
+
+    // Normalizar formato de salida para el cliente
+    const normalizedFacturas = (rawData || []).map((f: any) => ({
+      id: f.id,
+      proveedor_nit: f.proveedor_nit || f.nit || 'N/A',
+      proveedor_nombre: f.proveedor_nombre || null,
+      buyer_nit: f.buyer_nit || cleanBuyerNit || 'N/A',
+      buyer_name: f.buyer_name || null,
+      numero_factura: f.numero_factura || null,
+      fecha: f.fecha ? String(f.fecha) : null,
+      subtotal: f.subtotal !== null && f.subtotal !== undefined ? f.subtotal : 'N/A',
+      iva: f.iva !== null && f.iva !== undefined ? f.iva : 'N/A',
+      total: f.total !== null && f.total !== undefined ? f.total : 'N/A',
+      productos: Array.isArray(f.productos) ? f.productos : [],
+      estado: f.estado || 'procesada',
+      creado_en: f.creado_en
+    }));
 
     return NextResponse.json({
       success: true,
       connected: true,
-      facturas: data || []
+      facturas: normalizedFacturas
     });
   } catch (error: any) {
     console.error('Error al consultar facturas en Supabase:', error);
@@ -144,9 +190,9 @@ export async function DELETE(req: NextRequest) {
       .delete({ count: 'exact' })
       .in('id', validIds);
 
-    // Si se especifica empresa, aislar borrado al ámbito de la empresa
+    // Aislamiento por empresa
     if (cleanBuyerNit) {
-      deleteQuery = deleteQuery.or(`texto_extraido.ilike.%[NIT_COMPRADOR:${cleanBuyerNit}]%,xml_content.ilike.%<cbc:CompanyID%>${cleanBuyerNit}</cbc:CompanyID>%`);
+      deleteQuery = deleteQuery.or(`buyer_nit.eq.${cleanBuyerNit},texto_extraido.ilike.%[NIT_COMPRADOR:${cleanBuyerNit}]%`);
     }
 
     const { error, count } = await deleteQuery;
@@ -165,6 +211,6 @@ export async function DELETE(req: NextRequest) {
     return NextResponse.json({
       success: false,
       message: error.message || 'Error al eliminar registros en Supabase.'
-    }, { status: 500 });
+    });
   }
 }

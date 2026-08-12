@@ -446,20 +446,46 @@ export async function POST(req: NextRequest) {
     const activeBuyerNit = fields.BuyerNIT || '901584216';
     const rawText = `[NIT_COMPRADOR:${activeBuyerNit}] ${datosJson.TextoExtraido || `[Analizado exitosamente con Google Gemini AI (${modelUsed})]`}`;
 
-    // Guardar en Supabase si está disponible
+    // Guardar en Supabase con la estructura normalizada de Etapa 3
     let guardadoEnSupabase = false;
     const supabase = getSupabaseClient();
     if (supabase) {
       try {
-        await supabase.from('facturas').insert({
-          nit: fields.NIT,
-          fecha: fields.Fecha,
-          subtotal: fields.Subtotal,
-          iva: fields.IVA,
-          total: fields.Total,
+        const subtotalNum = limpiarValorNumerico(fields.Subtotal) || null;
+        const ivaNum = limpiarValorNumerico(fields.IVA) || null;
+        const totalNum = limpiarValorNumerico(fields.Total) || (subtotalNum !== null && ivaNum !== null ? subtotalNum + ivaNum : null);
+        const isoDate = (fields.Fecha && fields.Fecha !== 'N/A' && /^\d{4}-\d{2}-\d{2}$/.test(fields.Fecha)) ? fields.Fecha : null;
+
+        const newSchemaPayload = {
+          proveedor_nit: fields.NIT || 'N/A',
+          proveedor_nombre: fields.NombreProveedor || null,
+          buyer_nit: activeBuyerNit,
+          buyer_name: fields.BuyerName || null,
+          numero_factura: (est as any).invoiceXml ? ((est.invoiceXml.match(/<cbc:ID>([^<]+)<\/cbc:ID>/) || [])[1] || null) : null,
+          fecha: isoDate,
+          subtotal: subtotalNum,
+          iva: ivaNum,
+          total: totalNum,
+          productos: fields.Productos || [],
+          estado: 'procesada',
           texto_extraido: rawText,
           xml_content: est.attachedXml,
-        });
+        };
+
+        const { error: insertErr } = await supabase.from('facturas').insert(newSchemaPayload);
+        
+        if (insertErr) {
+          // Retrocompatibilidad con schema anterior mientras se ejecuta la migración
+          await supabase.from('facturas').insert({
+            nit: fields.NIT,
+            fecha: fields.Fecha,
+            subtotal: fields.Subtotal,
+            iva: fields.IVA,
+            total: fields.Total,
+            texto_extraido: rawText,
+            xml_content: est.attachedXml,
+          });
+        }
         guardadoEnSupabase = true;
       } catch (errDb) {
         console.error('Error al guardar en Supabase:', errDb);
