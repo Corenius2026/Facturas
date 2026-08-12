@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { GoogleGenAI, Type } from '@google/genai';
 import { getSupabaseClient } from '@/lib/supabase';
+import { checkRateLimit, getClientIp } from '@/lib/rate-limit';
+import { validateImageBuffer } from '@/lib/file-validator';
 import JSZip from 'jszip';
 
 interface ProductoItem {
@@ -36,6 +38,11 @@ function escapeXml(unsafe: string): string {
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&apos;');
+}
+
+function sanitizeString(input: string, maxLen: number = 100): string {
+  if (!input) return '';
+  return input.trim().replace(/[^\w\s.,&@#\-áéíóúÁÉÍÓÚñÑ]/g, '').substring(0, maxLen);
 }
 
 const PDF_CONTENT_STRING = (
@@ -289,36 +296,57 @@ ${productosXmlLines}
 
 export async function POST(req: NextRequest) {
   try {
-    const formData = await req.formData();
-    const file = formData.get('file') as File | null;
-    const geminiApiKeyInput = formData.get('gemini_api_key') as string | null;
-    const customModelInput = formData.get('gemini_model') as string | null;
-    const buyerNitInput = formData.get('buyer_nit') as string | null;
-    const buyerNameInput = formData.get('buyer_name') as string | null;
-
-    if (!file) {
-      return NextResponse.json({ success: false, detail: 'No se envió ningún archivo de imagen.' }, { status: 400 });
+    // 1. Control de Tasa (Rate Limiting) por IP - Máximo 10 peticiones por minuto
+    const clientIp = getClientIp(req);
+    const rateLimit = checkRateLimit(`procesar_${clientIp}`, 10, 60 * 1000);
+    if (!rateLimit.allowed) {
+      return NextResponse.json({
+        success: false,
+        detail: 'Has alcanzado el límite de solicitudes permitidas por minuto. Por favor, espera un momento antes de procesar otra factura.'
+      }, {
+        status: 429,
+        headers: { 'Retry-After': '60' }
+      });
     }
 
-    const apiKeyToUse = geminiApiKeyInput?.trim() || process.env.GEMINI_API_KEY || '';
+    const formData = await req.formData();
+    const file = formData.get('file') as File | null;
+    const rawBuyerNit = formData.get('buyer_nit') as string | null;
+    const rawBuyerName = formData.get('buyer_name') as string | null;
 
+    if (!file) {
+      return NextResponse.json({ success: false, detail: 'No se envió ningún archivo de factura para analizar.' }, { status: 400 });
+    }
+
+    // 2. Validación de Credencial Exclusiva en Servidor
+    const apiKeyToUse = process.env.GEMINI_API_KEY || '';
     if (!apiKeyToUse) {
       return NextResponse.json({
         success: false,
-        detail: 'Se requiere una clave de API de Google Gemini (GEMINI_API_KEY). Ingresa tu API Key en la pantalla o en las variables de entorno de Vercel.'
+        detail: 'El servicio de IA no está configurado en el servidor (Falta la variable GEMINI_API_KEY en el entorno).'
+      }, { status: 500 });
+    }
+
+    // 3. Validación Estricta de Archivo (Tamaño y Magic Bytes)
+    const arrayBuffer = await file.arrayBuffer();
+    const buffer = Buffer.from(arrayBuffer);
+    const validation = validateImageBuffer(buffer, file.type);
+    if (!validation.valid) {
+      return NextResponse.json({
+        success: false,
+        detail: validation.error || 'El archivo cargado no es una imagen válida.'
       }, { status: 400 });
     }
 
-    const arrayBuffer = await file.arrayBuffer();
-    const buffer = Buffer.from(arrayBuffer);
+    // Sanitización de entradas del cliente
+    const buyerNitInput = rawBuyerNit ? rawBuyerNit.replace(/[^0-9]/g, '').substring(0, 15) : '';
+    const buyerNameInput = rawBuyerName ? sanitizeString(rawBuyerName, 100) : '';
 
-    // Inicializar cliente Google GenAI
+    // 4. Inicializar cliente Google GenAI
     const ai = new GoogleGenAI({ apiKey: apiKeyToUse });
     
-    // Modelo primario configurado: gemini-3.5-flash
-    const preferredModel = customModelInput?.trim() || process.env.GEMINI_MODEL || 'gemini-3.5-flash';
-
-    // Lista ordenada de modelos a intentar
+    // Modelo primario configurado en entorno
+    const preferredModel = process.env.GEMINI_MODEL || 'gemini-3.5-flash';
     const modelsToTry = Array.from(new Set([preferredModel, 'gemini-3.5-flash', 'gemini-2.0-flash', 'gemini-1.5-flash']));
 
     const prompt = (
@@ -343,7 +371,7 @@ export async function POST(req: NextRequest) {
           contents: [
             {
               inlineData: {
-                mimeType: file.type || 'image/jpeg',
+                mimeType: validation.detectedMimeType || file.type || 'image/jpeg',
                 data: buffer.toString('base64'),
               },
             },
@@ -383,7 +411,7 @@ export async function POST(req: NextRequest) {
         });
 
         modelUsed = candidateModel;
-        break; // Éxito!
+        break; // Éxito
       } catch (err: any) {
         console.warn(`Modelo ${candidateModel} no disponible, probando siguiente modelo...`, err?.message);
         lastError = err;
@@ -413,7 +441,10 @@ export async function POST(req: NextRequest) {
     };
 
     const est = await generarEstructuraSiigoIdentica(fields);
-    const rawText = datosJson.TextoExtraido || `[Analizado exitosamente con la API de Google Gemini (${modelUsed})]`;
+    
+    // Tag de aislamiento multi-empresa embebido en texto extraído
+    const activeBuyerNit = fields.BuyerNIT || '901584216';
+    const rawText = `[NIT_COMPRADOR:${activeBuyerNit}] ${datosJson.TextoExtraido || `[Analizado exitosamente con Google Gemini AI (${modelUsed})]`}`;
 
     // Guardar en Supabase si está disponible
     let guardadoEnSupabase = false;
@@ -435,7 +466,7 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    const imageOriginalB64 = `data:${file.type || 'image/jpeg'};base64,${buffer.toString('base64')}`;
+    const imageOriginalB64 = `data:${validation.detectedMimeType || 'image/jpeg'};base64,${buffer.toString('base64')}`;
 
     return NextResponse.json({
       success: true,

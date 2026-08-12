@@ -405,6 +405,7 @@ export default function MinimarketPOSPage() {
       setXmlFilenameInside(est.xmlFilenameInside);
       setPdfFilenameInside(est.pdfFilenameInside);
     }
+    loadHistory(comp.nit);
     showToast(`Empresa activa seleccionada: ${comp.nombre}`, 'success');
   };
 
@@ -436,10 +437,18 @@ export default function MinimarketPOSPage() {
     }
   };
 
-  const loadHistory = async () => {
+  const loadHistory = async (targetBuyerNit?: string) => {
     try {
-      const res = await fetch('/api/facturas');
+      const nitToUse = (targetBuyerNit !== undefined ? targetBuyerNit : buyerNit).trim();
+      const url = nitToUse ? `/api/facturas?buyer_nit=${encodeURIComponent(nitToUse)}` : '/api/facturas';
+      const res = await fetch(url);
       const data = await res.json();
+      if (!res.ok) {
+        if (res.status === 429) {
+          showToast(data.error || 'Límite de consultas alcanzado. Espera un momento.', 'warning');
+        }
+        return;
+      }
       if (data.connected && data.facturas) {
         setHistory(data.facturas);
       }
@@ -657,7 +666,7 @@ export default function MinimarketPOSPage() {
       const res = await fetch('/api/facturas', {
         method: 'DELETE',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ids: idsToDelete }),
+        body: JSON.stringify({ ids: idsToDelete, buyer_nit: buyerNit.trim() }),
       });
 
       const result = await res.json();
@@ -1065,7 +1074,7 @@ export default function MinimarketPOSPage() {
             )}
 
             <button
-              onClick={loadHistory}
+              onClick={() => loadHistory()}
               className="bg-[#EAF2F8] hover:bg-[#BDD8E9] border border-[#BDD8E9] text-[#001D39] font-bold px-3.5 py-1.5 rounded-xl text-xs flex items-center gap-1.5 transition-all"
             >
               <RefreshCw className="w-3.5 h-3.5 text-[#0A4174]" />

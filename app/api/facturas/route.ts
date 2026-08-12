@@ -1,7 +1,22 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSupabaseClient } from '@/lib/supabase';
+import { checkRateLimit, getClientIp } from '@/lib/rate-limit';
 
-export async function GET() {
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+export async function GET(req: NextRequest) {
+  // 1. Rate Limiting por IP para GET (Máximo 60 peticiones/minuto)
+  const clientIp = getClientIp(req);
+  const rateLimit = checkRateLimit(`facturas_get_${clientIp}`, 60, 60 * 1000);
+  if (!rateLimit.allowed) {
+    return NextResponse.json({
+      success: false,
+      connected: false,
+      facturas: [],
+      error: 'Demasiadas solicitudes. Espera un momento antes de volver a consultar.'
+    }, { status: 429 });
+  }
+
   const supabase = getSupabaseClient();
   if (!supabase) {
     return NextResponse.json({
@@ -13,11 +28,22 @@ export async function GET() {
   }
 
   try {
-    const { data, error } = await supabase
+    const { searchParams } = new URL(req.url);
+    const rawBuyerNit = searchParams.get('buyer_nit');
+    const cleanBuyerNit = rawBuyerNit ? rawBuyerNit.replace(/[^0-9]/g, '').substring(0, 15) : '';
+
+    let query = supabase
       .from('facturas')
       .select('*')
       .order('creado_en', { ascending: false })
       .limit(100);
+
+    // 2. Aislamiento Multi-Empresa: Filtrar exclusivamente las facturas de la empresa activa
+    if (cleanBuyerNit) {
+      query = query.or(`texto_extraido.ilike.%[NIT_COMPRADOR:${cleanBuyerNit}]%,xml_content.ilike.%<cbc:CompanyID%>${cleanBuyerNit}</cbc:CompanyID>%`);
+    }
+
+    const { data, error } = await query;
 
     if (error) {
       throw error;
@@ -29,16 +55,27 @@ export async function GET() {
       facturas: data || []
     });
   } catch (error: any) {
+    console.error('Error al consultar facturas en Supabase:', error);
     return NextResponse.json({
       success: false,
       connected: true,
-      error: error.message,
+      error: error.message || 'Error al recuperar facturas.',
       facturas: []
     });
   }
 }
 
 export async function DELETE(req: NextRequest) {
+  // 1. Rate Limiting por IP para DELETE (Máximo 20 eliminaciones/minuto)
+  const clientIp = getClientIp(req);
+  const rateLimit = checkRateLimit(`facturas_del_${clientIp}`, 20, 60 * 1000);
+  if (!rateLimit.allowed) {
+    return NextResponse.json({
+      success: false,
+      message: 'Límite de solicitudes de eliminación excedido. Por favor espera un momento.'
+    }, { status: 429 });
+  }
+
   const supabase = getSupabaseClient();
   if (!supabase) {
     return NextResponse.json({
@@ -48,9 +85,12 @@ export async function DELETE(req: NextRequest) {
   }
 
   try {
-    const body = await req.json();
+    const body = await req.json().catch(() => ({}));
     const ids: string[] = body.ids || [];
+    const rawBuyerNit = body.buyer_nit as string | undefined;
+    const cleanBuyerNit = rawBuyerNit ? rawBuyerNit.replace(/[^0-9]/g, '').substring(0, 15) : '';
 
+    // 2. Validación Estricta de IDs
     if (!Array.isArray(ids) || ids.length === 0) {
       return NextResponse.json({
         success: false,
@@ -58,10 +98,33 @@ export async function DELETE(req: NextRequest) {
       }, { status: 400 });
     }
 
-    const { error, count } = await supabase
+    if (ids.length > 50) {
+      return NextResponse.json({
+        success: false,
+        message: 'Por seguridad, el límite máximo de eliminación es de 50 facturas por lote.'
+      }, { status: 400 });
+    }
+
+    // Validar que cada ID sea un formato UUID válido
+    const validIds = ids.filter(id => typeof id === 'string' && UUID_REGEX.test(id.trim()));
+    if (validIds.length === 0) {
+      return NextResponse.json({
+        success: false,
+        message: 'Ninguno de los identificadores proporcionados tiene un formato UUID válido.'
+      }, { status: 400 });
+    }
+
+    let deleteQuery = supabase
       .from('facturas')
       .delete({ count: 'exact' })
-      .in('id', ids);
+      .in('id', validIds);
+
+    // Si se especifica empresa, aislar borrado al ámbito de la empresa
+    if (cleanBuyerNit) {
+      deleteQuery = deleteQuery.or(`texto_extraido.ilike.%[NIT_COMPRADOR:${cleanBuyerNit}]%,xml_content.ilike.%<cbc:CompanyID%>${cleanBuyerNit}</cbc:CompanyID>%`);
+    }
+
+    const { error, count } = await deleteQuery;
 
     if (error) {
       throw error;
@@ -69,8 +132,8 @@ export async function DELETE(req: NextRequest) {
 
     return NextResponse.json({
       success: true,
-      count: count || ids.length,
-      message: `${count || ids.length} registro(s) eliminado(s) correctamente.`
+      count: count ?? validIds.length,
+      message: `${count ?? validIds.length} registro(s) eliminado(s) correctamente.`
     });
   } catch (error: any) {
     console.error('Error al eliminar en Supabase:', error);
