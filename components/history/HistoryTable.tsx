@@ -145,7 +145,6 @@ export const HistoryTable: React.FC<HistoryTableProps> = ({
               <th className="py-4 px-6 font-medium">Proveedor</th>
               <th className="py-4 px-6 font-medium text-center">Ítems</th>
               <th className="py-4 px-6 font-medium text-right">Total Liquidado</th>
-              <th className="py-4 px-6 font-medium text-center">Estado</th>
               <th className="py-4 px-6 font-medium text-right w-24">Acciones</th>
             </tr>
           </thead>
@@ -213,12 +212,6 @@ export const HistoryTable: React.FC<HistoryTableProps> = ({
 
                     <td className="py-4 px-6 font-mono font-medium text-foreground text-right whitespace-nowrap">
                       {formatMonetaryDisplay(item.total)}
-                    </td>
-
-                    <td className="py-4 px-6 text-center whitespace-nowrap">
-                      <span className={`inline-block px-2 py-1 rounded text-xs font-medium ${isRevision ? 'bg-amber-500/10 text-amber-600 dark:text-amber-400' : 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'}`}>
-                        {isRevision ? 'Revisión' : 'OK UBL'}
-                      </span>
                     </td>
 
                     <td className="py-4 px-6 text-right whitespace-nowrap">

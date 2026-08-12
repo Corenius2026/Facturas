@@ -71,15 +71,6 @@ export const InvoiceDetailCard: React.FC<InvoiceDetailCardProps> = ({
             <FileCode className="w-4 h-4" />
             <span className="hidden sm:inline">Descargar XML</span>
           </Button>
-          
-          <Button
-            onClick={onCopyXml}
-            variant="outline"
-            className="gap-2 text-muted-foreground hover:text-foreground"
-          >
-            <Copy className="w-4 h-4" />
-            <span className="hidden sm:inline">Copiar</span>
-          </Button>
 
           <Button
             onClick={onDownloadCsv}
