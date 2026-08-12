@@ -26,7 +26,9 @@ import {
   FileArchive,
   Plus,
   BookmarkCheck,
-  Check
+  Check,
+  Building,
+  X
 } from 'lucide-react';
 import JSZip from 'jszip';
 
@@ -309,8 +311,8 @@ ${productosXmlLines}
 
 export default function MinimarketPOSPage() {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
-  const [buyerNit, setBuyerNit] = useState<string>('901584216');
-  const [buyerName, setBuyerName] = useState<string>('DISTRIBUIDORA AHORRA MAX SAS');
+  const [buyerNit, setBuyerNit] = useState<string>('');
+  const [buyerName, setBuyerName] = useState<string>('');
   const [savedCompanies, setSavedCompanies] = useState<EmpresaGuardada[]>([]);
   
   const [previewUrl, setPreviewUrl] = useState<string>('');
@@ -339,20 +341,24 @@ export default function MinimarketPOSPage() {
   // Cargar empresas guardadas del usuario desde localStorage
   useEffect(() => {
     try {
-      const saved = localStorage.getItem('siigo_empresas');
+      const saved = localStorage.getItem('siigo_empresas_list');
+      const activeNit = localStorage.getItem('siigo_active_buyer_nit') || '';
+      const activeName = localStorage.getItem('siigo_active_buyer_name') || '';
+
       if (saved) {
         const parsed = JSON.parse(saved);
         if (Array.isArray(parsed) && parsed.length > 0) {
           setSavedCompanies(parsed);
-          setBuyerNit(parsed[0].nit);
-          setBuyerName(parsed[0].nombre);
+          setBuyerNit(activeNit || parsed[0].nit);
+          setBuyerName(activeName || parsed[0].nombre);
+          return;
         }
-      } else {
-        const defaultList: EmpresaGuardada[] = [
-          { nit: '901584216', nombre: 'DISTRIBUIDORA AHORRA MAX SAS' }
-        ];
-        setSavedCompanies(defaultList);
-        localStorage.setItem('siigo_empresas', JSON.stringify(defaultList));
+      }
+
+      // Si hay un NIT activo guardado previamente
+      if (activeNit) {
+        setBuyerNit(activeNit);
+        setBuyerName(activeName);
       }
     } catch (e) {
       console.error('Error loading saved companies:', e);
@@ -361,7 +367,7 @@ export default function MinimarketPOSPage() {
 
   const handleSaveCurrentCompany = () => {
     if (!buyerNit.trim()) {
-      showToast('Ingresa un NIT válido para guardar la empresa.', 'warning');
+      showToast('Ingresa el NIT de tu empresa en Siigo para guardarla.', 'warning');
       return;
     }
     const cleanNit = buyerNit.replace(/[^0-9]/g, '');
@@ -370,13 +376,25 @@ export default function MinimarketPOSPage() {
     const existing = savedCompanies.filter(c => c.nit !== cleanNit);
     const updated = [...existing, { nit: cleanNit, nombre: cleanName }];
     setSavedCompanies(updated);
-    localStorage.setItem('siigo_empresas', JSON.stringify(updated));
-    showToast(`Empresa ${cleanName} guardada en tu lista.`, 'success');
+    localStorage.setItem('siigo_empresas_list', JSON.stringify(updated));
+    localStorage.setItem('siigo_active_buyer_nit', cleanNit);
+    localStorage.setItem('siigo_active_buyer_name', cleanName);
+    showToast(`Empresa "${cleanName}" guardada con éxito.`, 'success');
+  };
+
+  const handleDeleteCompany = (nitToDelete: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    const updated = savedCompanies.filter(c => c.nit !== nitToDelete);
+    setSavedCompanies(updated);
+    localStorage.setItem('siigo_empresas_list', JSON.stringify(updated));
+    showToast('Empresa eliminada de tu lista.', 'success');
   };
 
   const handleSelectCompany = (comp: EmpresaGuardada) => {
     setBuyerNit(comp.nit);
     setBuyerName(comp.nombre);
+    localStorage.setItem('siigo_active_buyer_nit', comp.nit);
+    localStorage.setItem('siigo_active_buyer_name', comp.nombre);
     
     // Regenerar XML al instante si hay factura activa
     if (fields) {
@@ -388,26 +406,34 @@ export default function MinimarketPOSPage() {
       setXmlFilenameInside(est.xmlFilenameInside);
       setPdfFilenameInside(est.pdfFilenameInside);
     }
-    showToast(`Empresa activa cambiada a: ${comp.nombre}`, 'success');
+    showToast(`Empresa activa seleccionada: ${comp.nombre}`, 'success');
   };
 
   const handleBuyerNitChange = (val: string) => {
     setBuyerNit(val);
+    localStorage.setItem('siigo_active_buyer_nit', val);
     if (fields) {
       const updatedFields = { ...fields, BuyerNIT: val };
       setFields(updatedFields);
       const est = generarXmlSiigoClient(updatedFields);
       setXmlContent(est.attachedXml);
+      setZipFilename(est.zipFilename);
+      setXmlFilenameInside(est.xmlFilenameInside);
+      setPdfFilenameInside(est.pdfFilenameInside);
     }
   };
 
   const handleBuyerNameChange = (val: string) => {
     setBuyerName(val);
+    localStorage.setItem('siigo_active_buyer_name', val);
     if (fields) {
       const updatedFields = { ...fields, BuyerName: val };
       setFields(updatedFields);
       const est = generarXmlSiigoClient(updatedFields);
       setXmlContent(est.attachedXml);
+      setZipFilename(est.zipFilename);
+      setXmlFilenameInside(est.xmlFilenameInside);
+      setPdfFilenameInside(est.pdfFilenameInside);
     }
   };
 
@@ -471,16 +497,16 @@ export default function MinimarketPOSPage() {
         throw new Error(result.detail || 'Error al procesar la factura.');
       }
 
-      // Si la IA detectó un comprador y no teníamos uno personalizado, usamos el detectado
-      if (result.fields?.BuyerNIT && result.fields.BuyerNIT !== '901584216') {
+      // Si el usuario no ha digitado una empresa y la IA detectó una en la foto, sugerirla
+      if (!buyerNit && result.fields?.BuyerNIT) {
         setBuyerNit(result.fields.BuyerNIT);
       }
-      if (result.fields?.BuyerName && result.fields.BuyerName !== 'MI EMPRESA SAS') {
+      if (!buyerName && result.fields?.BuyerName) {
         setBuyerName(result.fields.BuyerName);
       }
 
-      const activeBuyerNit = result.fields?.BuyerNIT || buyerNit;
-      const activeBuyerName = result.fields?.BuyerName || buyerName;
+      const activeBuyerNit = buyerNit.trim() || result.fields?.BuyerNIT || '901584216';
+      const activeBuyerName = buyerName.trim() || result.fields?.BuyerName || 'MI EMPRESA SAS';
 
       const fullFields: InvoiceFields = {
         ...result.fields,
@@ -492,7 +518,7 @@ export default function MinimarketPOSPage() {
       setProductos(result.productos || result.fields?.Productos || []);
       setRawText(result.raw_text);
 
-      // Generar XML exacto sincronizado
+      // Generar XML exacto sincronizado con la empresa activa
       const est = generarXmlSiigoClient(fullFields);
       setXmlContent(est.attachedXml);
       setZipFilename(est.zipFilename);
@@ -536,11 +562,11 @@ export default function MinimarketPOSPage() {
     }
 
     try {
-      // Regenerar el XML garantizando que use el BuyerNIT y BuyerName seleccionados
+      // Regenerar el XML garantizando que use el BuyerNIT y BuyerName exactos
       const currentFields: InvoiceFields = {
         ...fields,
-        BuyerNIT: buyerNit,
-        BuyerName: buyerName,
+        BuyerNIT: buyerNit.trim() || '901584216',
+        BuyerName: buyerName.trim() || 'MI EMPRESA SAS',
       };
 
       const est = generarXmlSiigoClient(currentFields);
@@ -568,7 +594,7 @@ export default function MinimarketPOSPage() {
       a.click();
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
-      showToast(`¡Paquete ${targetZipFilename} descargado para Siigo!`, 'success');
+      showToast(`¡Paquete ${targetZipFilename} descargado con NIT ${currentFields.BuyerNIT}!`, 'success');
     } catch (err: any) {
       console.error('Error al empaquetar ZIP:', err);
       showToast(err?.message || 'Error al generar el archivo .ZIP', 'error');
@@ -577,12 +603,15 @@ export default function MinimarketPOSPage() {
 
   const downloadSiigoCsvFile = () => {
     if (!fields) return;
+    const activeBuyerNit = buyerNit.trim() || '901584216';
+    const activeBuyerName = buyerName.trim() || 'MI EMPRESA SAS';
+    
     const headers = ["NIT Proveedor", "Nombre Proveedor", "NIT Comprador", "Empresa Compradora", "Fecha Emision", "Subtotal", "IVA", "Total Factura", "Cantidad", "Descripcion Producto", "Precio Unitario", "Total Producto"];
     const rows = (productos.length > 0 ? productos : [{ cantidad: "1", descripcion: "Mercancia General", precio_unitario: fields.Subtotal, total_item: fields.Subtotal }]).map(p => [
       `"${fields.NIT}"`,
       `"${(fields.NombreProveedor || '').replace(/"/g, '""')}"`,
-      `"${buyerNit}"`,
-      `"${buyerName.replace(/"/g, '""')}"`,
+      `"${activeBuyerNit}"`,
+      `"${activeBuyerName.replace(/"/g, '""')}"`,
       `"${fields.Fecha}"`,
       `"${fields.Subtotal}"`,
       `"${fields.IVA}"`,
@@ -683,50 +712,59 @@ export default function MinimarketPOSPage() {
                 Modelo Funcional V1
               </span>
             </div>
-            <p className="text-[#BDD8E9] text-xs sm:text-sm mt-1 font-medium">Digitalizador Multi-Empresa de Facturas para Siigo Nube</p>
+            <p className="text-[#BDD8E9] text-xs sm:text-sm mt-1 font-medium">Digitalizador de Facturas con Vinculación de Empresa para Siigo Nube</p>
           </div>
         </div>
       </header>
 
       {/* Main Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-        {/* Left Column: Upload and Company Selector */}
+        {/* Left Column: Company Setup & Upload */}
         <section className="lg:col-span-5 space-y-6">
-          {/* Active Company Selector (Multi-Empresa) */}
+          {/* Active Company Config Card */}
           <div className="bg-white border border-[#BDD8E9] rounded-2xl p-6 shadow-md space-y-4">
             <div className="flex items-center justify-between border-b border-[#EAF2F8] pb-3">
-              <h2 className="text-sm font-extrabold text-[#001D39] flex items-center gap-2 uppercase tracking-wider">
-                <Building2 className="w-4 h-4 text-[#0A4174]" />
-                Empresa Receptora en Siigo
-              </h2>
-              <span className="bg-[#EAF2F8] text-[#0A4174] text-[10px] font-black px-2.5 py-0.5 rounded-full border border-[#BDD8E9]">
-                Multi-Empresa
-              </span>
+              <div className="flex items-center gap-2">
+                <Building2 className="w-5 h-5 text-[#0A4174]" />
+                <div>
+                  <h2 className="text-sm font-extrabold text-[#001D39] uppercase tracking-wider">
+                    Tu Empresa en Siigo (Comprador)
+                  </h2>
+                  <p className="text-[11px] text-[#49769F]">Configura el NIT con el que cargarás a Siigo</p>
+                </div>
+              </div>
             </div>
 
             {/* Saved Companies Quick Switcher */}
             {savedCompanies.length > 0 && (
-              <div className="space-y-1.5">
-                <span className="text-[11px] font-bold text-[#49769F] uppercase tracking-wider block">
-                  Seleccionar Empresa Guardada:
+              <div className="space-y-1.5 bg-[#EAF2F8]/60 p-3 rounded-xl border border-[#BDD8E9]">
+                <span className="text-[10px] font-extrabold text-[#49769F] uppercase tracking-wider block">
+                  Mis Empresas Guardadas:
                 </span>
                 <div className="flex flex-wrap gap-1.5">
                   {savedCompanies.map((comp) => {
                     const isSelected = buyerNit.replace(/[^0-9]/g, '') === comp.nit.replace(/[^0-9]/g, '');
                     return (
-                      <button
+                      <div
                         key={comp.nit}
-                        type="button"
                         onClick={() => handleSelectCompany(comp)}
-                        className={`text-xs px-3 py-1.5 rounded-xl font-bold flex items-center gap-1.5 transition-all border ${
+                        className={`text-xs px-3 py-1.5 rounded-xl font-bold flex items-center gap-2 cursor-pointer transition-all border ${
                           isSelected
                             ? 'bg-[#001D39] text-[#7BBDE8] border-[#001D39] shadow-sm'
-                            : 'bg-[#EAF2F8] text-[#001D39] border-[#BDD8E9] hover:bg-[#BDD8E9]'
+                            : 'bg-white text-[#001D39] border-[#BDD8E9] hover:bg-[#BDD8E9]/40'
                         }`}
                       >
                         {isSelected && <Check className="w-3 h-3 text-[#7BBDE8]" />}
                         <span>{comp.nombre} ({comp.nit})</span>
-                      </button>
+                        <button
+                          type="button"
+                          onClick={(e) => handleDeleteCompany(comp.nit, e)}
+                          title="Eliminar de mi lista"
+                          className="text-red-400 hover:text-red-600 focus:outline-none ml-1"
+                        >
+                          <X className="w-3 h-3" />
+                        </button>
+                      </div>
                     );
                   })}
                 </div>
@@ -734,42 +772,53 @@ export default function MinimarketPOSPage() {
             )}
 
             {/* Active Company Inputs */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+            <div className="space-y-3">
               <div className="space-y-1">
-                <label className="block text-[11px] font-bold text-[#001D39] uppercase">
-                  NIT de tu Empresa (Comprador):
+                <label className="block text-[11px] font-extrabold text-[#001D39] uppercase">
+                  NIT de tu Empresa en Siigo:
                 </label>
                 <input
                   type="text"
                   value={buyerNit}
                   onChange={(e) => handleBuyerNitChange(e.target.value)}
-                  placeholder="Ej. 901584216"
-                  className="w-full bg-[#EAF2F8]/60 border border-[#BDD8E9] rounded-xl px-3 py-2 text-xs text-[#001D39] font-bold focus:outline-none focus:border-[#0A4174] focus:bg-white transition-all"
+                  placeholder="Escribe el NIT (ej: 900123456)"
+                  className="w-full bg-[#EAF2F8]/40 border border-[#BDD8E9] rounded-xl px-3 py-2.5 text-xs text-[#001D39] font-bold focus:outline-none focus:border-[#0A4174] focus:bg-white transition-all shadow-inner"
                 />
               </div>
 
               <div className="space-y-1">
-                <label className="block text-[11px] font-bold text-[#001D39] uppercase">
-                  Razón Social / Nombre:
+                <label className="block text-[11px] font-extrabold text-[#001D39] uppercase">
+                  Razón Social / Nombre de la Empresa:
                 </label>
                 <input
                   type="text"
                   value={buyerName}
                   onChange={(e) => handleBuyerNameChange(e.target.value)}
-                  placeholder="Ej. DISTRIBUIDORA AHORRA MAX SAS"
-                  className="w-full bg-[#EAF2F8]/60 border border-[#BDD8E9] rounded-xl px-3 py-2 text-xs text-[#001D39] font-bold focus:outline-none focus:border-[#0A4174] focus:bg-white transition-all"
+                  placeholder="Escribe la Razón Social (ej: MI EMPRESA S.A.S.)"
+                  className="w-full bg-[#EAF2F8]/40 border border-[#BDD8E9] rounded-xl px-3 py-2.5 text-xs text-[#001D39] font-bold focus:outline-none focus:border-[#0A4174] focus:bg-white transition-all shadow-inner"
                 />
               </div>
             </div>
 
-            <div className="flex justify-end pt-1">
+            <div className="flex items-center justify-between pt-1">
+              <div className="text-[11px] text-[#49769F] font-semibold">
+                {buyerNit ? (
+                  <span className="text-emerald-700 font-bold flex items-center gap-1">
+                    <CheckCircle2 className="w-3.5 h-3.5" />
+                    Vinculado: {buyerNit}
+                  </span>
+                ) : (
+                  <span>Ingresa el NIT de tu empresa</span>
+                )}
+              </div>
+              
               <button
                 type="button"
                 onClick={handleSaveCurrentCompany}
-                className="text-[11px] bg-[#EAF2F8] hover:bg-[#BDD8E9] text-[#0A4174] font-extrabold px-3 py-1.5 rounded-lg border border-[#BDD8E9] flex items-center gap-1.5 transition-all"
+                className="text-[11px] bg-[#001D39] hover:bg-[#0A4174] text-white font-extrabold px-3 py-1.5 rounded-lg flex items-center gap-1.5 transition-all shadow-sm"
               >
-                <BookmarkCheck className="w-3.5 h-3.5" />
-                <span>Guardar esta Empresa en mi lista</span>
+                <BookmarkCheck className="w-3.5 h-3.5 text-[#7BBDE8]" />
+                <span>Guardar Empresa</span>
               </button>
             </div>
           </div>
@@ -832,8 +881,8 @@ export default function MinimarketPOSPage() {
             <div className="absolute inset-0 bg-[#001D39]/85 backdrop-blur-sm border border-[#49769F] rounded-2xl z-40 flex flex-col items-center justify-center gap-4 text-white shadow-2xl">
               <div className="w-14 h-14 border-4 border-[#BDD8E9]/30 border-t-[#7BBDE8] rounded-full animate-spin flex items-center justify-center">
               </div>
-              <h3 className="font-bold text-base">Extrayendo Datos y Vinculando con {buyerName}...</h3>
-              <p className="text-xs text-[#BDD8E9]">Analizando automáticamente encabezados, productos e integrando formato UBL 2.1...</p>
+              <h3 className="font-bold text-base">Extrayendo Datos e Integrando con NIT {buyerNit || 'Empresa'}...</h3>
+              <p className="text-xs text-[#BDD8E9]">Generando automáticamente XML UBL 2.1 y paquete .ZIP para Siigo Nube...</p>
             </div>
           )}
 
@@ -851,8 +900,8 @@ export default function MinimarketPOSPage() {
                   <div className="flex items-center gap-3">
                     <FileArchive className="w-6 h-6 text-[#7BBDE8]" />
                     <div>
-                      <h3 className="font-bold text-sm">Archivos para Carga en Siigo Nube</h3>
-                      <p className="text-[11px] text-[#BDD8E9]">Empresa: <strong className="text-white">{buyerName} ({buyerNit})</strong></p>
+                      <h3 className="font-bold text-sm">Archivos de Carga para Siigo Nube</h3>
+                      <p className="text-[11px] text-[#BDD8E9]">Empresa Receptora: <strong className="text-[#7BBDE8]">{buyerName || 'MI EMPRESA'} (NIT: {buyerNit || '901584216'})</strong></p>
                     </div>
                   </div>
                 </div>
@@ -970,7 +1019,7 @@ export default function MinimarketPOSPage() {
                     <h2 className="text-sm font-extrabold text-[#001D39] uppercase tracking-wider">
                       Estructura XML DIAN UBL 2.1
                     </h2>
-                    <p className="text-[11px] text-[#49769F]">Adquirente configurado: <strong className="text-[#001D39]">{buyerName} ({buyerNit})</strong></p>
+                    <p className="text-[11px] text-[#49769F]">Adquirente configurado en XML: <strong className="text-[#0A4174]">{buyerName || 'MI EMPRESA'} (NIT: {buyerNit || '901584216'})</strong></p>
                   </div>
                   <div className="flex gap-2">
                     <button
