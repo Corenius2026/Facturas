@@ -4,8 +4,53 @@ import { FacturaDatos, ProductoItem, SiigoStructureResult } from '@/types/invoic
 export function limpiarValorNumerico(strVal: string | number | null | undefined): number {
   if (strVal === null || strVal === undefined) return 0;
   if (typeof strVal === 'number') return isNaN(strVal) ? 0 : strVal;
-  const clean = strVal.replace(/[^0-9.-]+/g, '');
-  const num = parseFloat(clean);
+  
+  let text = String(strVal).trim();
+  // Eliminar símbolos de moneda y caracteres extraños (dejando solo números, puntos, comas y signo menos)
+  text = text.replace(/[^0-9.,-]/g, '');
+  if (!text) return 0;
+  
+  const lastDot = text.lastIndexOf('.');
+  const lastComma = text.lastIndexOf(',');
+  
+  let normalized = text;
+  
+  if (lastDot > -1 && lastComma > -1) {
+    if (lastDot > lastComma) {
+      // Formato US: 2,500.50 -> quitar comas
+      normalized = text.replace(/,/g, '');
+    } else {
+      // Formato EU/CO: 2.500,50 -> quitar puntos, cambiar coma por punto
+      normalized = text.replace(/\./g, '').replace(',', '.');
+    }
+  } else if (lastDot > -1) {
+    // Si tiene un punto y lo que le sigue son exactamente 3 dígitos (ej: 266.940), es separador de miles
+    const parts = text.split('.');
+    if (parts[parts.length - 1].length === 3) {
+      normalized = text.replace(/\./g, '');
+    } else {
+      // De lo contrario es decimal (ej: 266.94 o 266.9400)
+      normalized = text;
+    }
+  } else if (lastComma > -1) {
+    // Si tiene coma y lo que le sigue son exactamente 3 dígitos (ej: 266,940), es separador de miles
+    const parts = text.split(',');
+    if (parts[parts.length - 1].length === 3) {
+      normalized = text.replace(/,/g, '');
+    } else {
+      normalized = text.replace(',', '.');
+    }
+  }
+
+  let num = parseFloat(normalized);
+  
+  // Salvaguarda para pesos colombianos: si el número resulta tener decimales y es menor a 1000 
+  // (ej. 266.94), es casi seguro un error de extracción de IA que omitió el último 0 de un 
+  // valor como 266.940. En Colombia no se usan céntimos y las facturas reales no son de $266.
+  if (!isNaN(num) && num > 0 && num < 1000 && (num % 1 !== 0)) {
+    num = Math.round(num * 1000);
+  }
+
   return isNaN(num) ? 0 : num;
 }
 
@@ -21,8 +66,7 @@ export function escapeXml(unsafe: string | null | undefined): string {
 
 export function formatMonetaryDisplay(val: number | string | null | undefined): string {
   if (val === null || val === undefined || val === 'N/A' || val === '') return 'N/A';
-  const num = typeof val === 'number' ? val : parseFloat(String(val).replace(/[^0-9.-]+/g, ''));
-  if (isNaN(num)) return String(val);
+  const num = limpiarValorNumerico(val);
   return `$ ${num.toLocaleString('es-CO', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`;
 }
 
