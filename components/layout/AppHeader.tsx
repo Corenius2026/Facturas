@@ -6,7 +6,6 @@ import { Button } from '@/components/ui/button';
 
 interface AppHeaderProps {
   title: string;
-  subtitle?: string;
   activeBuyerName: string;
   activeBuyerNit: string;
   onOpenCompanyModal: () => void;
@@ -18,7 +17,6 @@ interface AppHeaderProps {
 
 export const AppHeader: React.FC<AppHeaderProps> = ({
   title,
-  subtitle,
   activeBuyerName,
   activeBuyerNit,
   onOpenCompanyModal,
@@ -42,9 +40,6 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
 
         <div>
           <h1 className="text-lg font-bold text-foreground tracking-tight">{title}</h1>
-          {subtitle && (
-            <p className="text-xs text-muted-foreground hidden sm:block">{subtitle}</p>
-          )}
         </div>
       </div>
 

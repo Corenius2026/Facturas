@@ -335,18 +335,15 @@ export default function MinimarketPOSPage() {
       case 'uploader':
         return {
           title: 'Analizador de Facturas con IA',
-          subtitle: 'Carga una factura para extraer datos contables y generar el paquete UBL 2.1',
         };
       case 'history':
         return {
           title: 'Historial de Compras Integradas',
-          subtitle: `Gestión y exportación de facturas electrónicas para NIT ${buyerNit || 'Empresa'}`,
         };
       case 'dashboard':
       default:
         return {
           title: 'Panel de Control Contable',
-          subtitle: 'Resumen financiero, métricas de compras e integración con Siigo Nube',
         };
     }
   };
@@ -373,7 +370,6 @@ export default function MinimarketPOSPage() {
         {/* Sticky Header */}
         <AppHeader
           title={headerInfo.title}
-          subtitle={headerInfo.subtitle}
           activeBuyerName={buyerName}
           activeBuyerNit={buyerNit}
           onOpenCompanyModal={() => setIsCompanyModalOpen(true)}
