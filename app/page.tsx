@@ -28,9 +28,11 @@ import {
   BookmarkCheck,
   Check,
   Building,
-  X
+  X,
+  Zap
 } from 'lucide-react';
 import JSZip from 'jszip';
+import { optimizeInvoiceImage, ImageOptimizationStats } from '@/lib/image-optimizer';
 
 interface ProductoItem {
   cantidad: string;
@@ -313,6 +315,7 @@ export default function MinimarketPOSPage() {
   const [buyerNit, setBuyerNit] = useState<string>('');
   const [buyerName, setBuyerName] = useState<string>('');
   const [savedCompanies, setSavedCompanies] = useState<EmpresaGuardada[]>([]);
+  const [optimizationStats, setOptimizationStats] = useState<ImageOptimizationStats | null>(null);
   
   const [previewUrl, setPreviewUrl] = useState<string>('');
   const [isProcessing, setIsProcessing] = useState<boolean>(false);
@@ -484,16 +487,22 @@ export default function MinimarketPOSPage() {
     if (!targetFile) return;
 
     setIsProcessing(true);
-    const formData = new FormData();
-    formData.append('file', targetFile);
-    if (buyerNit.trim()) {
-      formData.append('buyer_nit', buyerNit.trim());
-    }
-    if (buyerName.trim()) {
-      formData.append('buyer_name', buyerName.trim());
-    }
+    setOptimizationStats(null);
 
     try {
+      // 1. Optimización inteligente en el navegador (redimensiona a máx 1800px y comprime para OCR óptimo)
+      const { file: optimizedFile, stats } = await optimizeInvoiceImage(targetFile, 1800, 0.84);
+      setOptimizationStats(stats);
+
+      const formData = new FormData();
+      formData.append('file', optimizedFile);
+      if (buyerNit.trim()) {
+        formData.append('buyer_nit', buyerNit.trim());
+      }
+      if (buyerName.trim()) {
+        formData.append('buyer_name', buyerName.trim());
+      }
+
       const res = await fetch('/api/procesar', {
         method: 'POST',
         body: formData,
@@ -561,6 +570,20 @@ export default function MinimarketPOSPage() {
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
     showToast('Archivo XML UBL 2.1 descargado', 'success');
+  };
+
+  const downloadHistoryXml = async (invoiceId: string, nit: string) => {
+    try {
+      showToast('Obteniendo XML de la factura...', 'success');
+      const res = await fetch(`/api/facturas?id=${encodeURIComponent(invoiceId)}`);
+      const data = await res.json();
+      if (!res.ok || !data.success || !data.factura?.xml_content) {
+        throw new Error(data.error || 'No se pudo recuperar el XML de esta factura.');
+      }
+      downloadXmlFile(data.factura.xml_content, `factura_${nit}.xml`);
+    } catch (err: any) {
+      showToast(err.message || 'Error al descargar XML', 'error');
+    }
   };
 
   const downloadSiigoZipFile = async () => {
@@ -861,6 +884,15 @@ export default function MinimarketPOSPage() {
                     <span>{selectedFile.name}</span>
                   </div>
                 )}
+
+                {optimizationStats && optimizationStats.reductionPercentage > 0 && (
+                  <div className="mt-3 inline-flex items-center gap-1.5 bg-emerald-50 border border-emerald-200 text-emerald-800 px-3 py-1 rounded-xl text-[11px] font-bold shadow-sm">
+                    <Zap className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                    <span>
+                      {(optimizationStats.originalSize / 1024).toFixed(0)} KB → {(optimizationStats.optimizedSize / 1024).toFixed(0)} KB (-{optimizationStats.reductionPercentage}%) en {optimizationStats.durationMs}ms
+                    </span>
+                  </div>
+                )}
               </div>
             </div>
 
@@ -1145,7 +1177,7 @@ export default function MinimarketPOSPage() {
                       <td className="p-3 text-right">
                         <div className="flex items-center justify-end gap-1.5">
                           <button
-                            onClick={() => downloadXmlFile(item.xml_content, `factura_${item.nit}.xml`)}
+                            onClick={() => downloadHistoryXml(item.id, item.nit)}
                             className="bg-[#001D39] hover:bg-[#0A4174] text-white px-2.5 py-1 rounded-lg text-xs font-bold inline-flex items-center gap-1 transition-all shadow-sm"
                             title="Descargar XML"
                           >

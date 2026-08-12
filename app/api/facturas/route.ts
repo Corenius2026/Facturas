@@ -29,16 +29,41 @@ export async function GET(req: NextRequest) {
 
   try {
     const { searchParams } = new URL(req.url);
+    const singleId = searchParams.get('id');
     const rawBuyerNit = searchParams.get('buyer_nit');
     const cleanBuyerNit = rawBuyerNit ? rawBuyerNit.replace(/[^0-9]/g, '').substring(0, 15) : '';
 
+    // 2. Consulta bajo demanda de XML para una sola factura (Descarga)
+    if (singleId) {
+      if (!UUID_REGEX.test(singleId.trim())) {
+        return NextResponse.json({ success: false, error: 'Identificador de factura no válido.' }, { status: 400 });
+      }
+
+      const { data, error } = await supabase
+        .from('facturas')
+        .select('id, nit, xml_content')
+        .eq('id', singleId.trim())
+        .single();
+
+      if (error || !data) {
+        return NextResponse.json({ success: false, error: 'Factura no encontrada.' }, { status: 404 });
+      }
+
+      return NextResponse.json({
+        success: true,
+        connected: true,
+        factura: data
+      });
+    }
+
+    // 3. Consulta de Listado General Optimizado: NO incluye xml_content para reducir el payload en ~99%
     let query = supabase
       .from('facturas')
-      .select('*')
+      .select('id, nit, fecha, subtotal, iva, total, texto_extraido, creado_en')
       .order('creado_en', { ascending: false })
       .limit(100);
 
-    // 2. Aislamiento Multi-Empresa: Filtrar exclusivamente las facturas de la empresa activa
+    // Aislamiento Multi-Empresa: Filtrar exclusivamente las facturas de la empresa activa
     if (cleanBuyerNit) {
       query = query.or(`texto_extraido.ilike.%[NIT_COMPRADOR:${cleanBuyerNit}]%,xml_content.ilike.%<cbc:CompanyID%>${cleanBuyerNit}</cbc:CompanyID>%`);
     }

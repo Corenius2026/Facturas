@@ -466,8 +466,6 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    const imageOriginalB64 = `data:${validation.detectedMimeType || 'image/jpeg'};base64,${buffer.toString('base64')}`;
-
     return NextResponse.json({
       success: true,
       filename: file.name,
@@ -479,7 +477,6 @@ export async function POST(req: NextRequest) {
       buyer_name: fields.BuyerName,
       nombre_proveedor: fields.NombreProveedor,
       productos: fields.Productos,
-      imagen_original_b64: imageOriginalB64,
       xml_content: est.attachedXml,
       invoice_xml_content: est.invoiceXml,
       zip_filename: est.zipFilename,
