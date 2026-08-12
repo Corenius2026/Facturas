@@ -329,6 +329,7 @@ export default function MinimarketPOSPage() {
   const [buyerName, setBuyerName] = useState<string>('');
   const [savedCompanies, setSavedCompanies] = useState<EmpresaGuardada[]>([]);
   const [optimizationStats, setOptimizationStats] = useState<ImageOptimizationStats | null>(null);
+  const [duplicateNotice, setDuplicateNotice] = useState<{ isDuplicate: boolean; type?: string; message?: string } | null>(null);
   
   const [previewUrl, setPreviewUrl] = useState<string>('');
   const [isProcessing, setIsProcessing] = useState<boolean>(false);
@@ -555,7 +556,17 @@ export default function MinimarketPOSPage() {
       setXmlFilenameInside(est.xmlFilenameInside);
       setPdfFilenameInside(est.pdfFilenameInside);
 
-      showToast('¡Factura analizada e integrada con éxito!', 'success');
+      if (result.duplicate) {
+        setDuplicateNotice({
+          isDuplicate: true,
+          type: result.duplicate_type,
+          message: result.message,
+        });
+        showToast(result.message || 'Factura ya registrada previamente.', 'warning');
+      } else {
+        setDuplicateNotice(null);
+        showToast('¡Factura analizada e integrada con éxito!', 'success');
+      }
       loadHistory();
     } catch (err: any) {
       showToast(err.message || 'Error en el procesamiento de la factura', 'error');
@@ -942,6 +953,19 @@ export default function MinimarketPOSPage() {
             </div>
           ) : (
             <>
+              {/* Alerta Visual de Idempotencia / Factura Duplicada */}
+              {duplicateNotice && duplicateNotice.isDuplicate && (
+                <div className="bg-amber-50 border border-amber-300 text-amber-900 px-4 py-3 rounded-2xl flex items-center gap-3 shadow-sm">
+                  <Zap className="w-5 h-5 text-amber-600 shrink-0" />
+                  <div className="text-xs font-semibold">
+                    <span className="font-bold">
+                      {duplicateNotice.type === 'image_hash' ? '⚡ Recuperada de Caché (Misma Imagen)' : '🔄 Factura Ya Registrada en tu Empresa'}:
+                    </span>{' '}
+                    {duplicateNotice.message}
+                  </div>
+                </div>
+              )}
+
               {/* Export Buttons Bar for Siigo */}
               <div className="bg-gradient-to-r from-[#001D39] to-[#0A4174] border border-[#49769F]/40 rounded-2xl p-5 shadow-lg text-white space-y-3">
                 <div className="flex items-center justify-between border-b border-white/10 pb-3 flex-wrap gap-2">

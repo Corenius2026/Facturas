@@ -3,6 +3,7 @@ import { GoogleGenAI, Type } from '@google/genai';
 import { getSupabaseClient } from '@/lib/supabase';
 import { checkRateLimit, getClientIp } from '@/lib/rate-limit';
 import { validateImageBuffer } from '@/lib/file-validator';
+import { calculateImageHash, generateAccountingIdempotencyKey, normalizeInvoiceNumber } from '@/lib/idempotency';
 import JSZip from 'jszip';
 
 interface ProductoItem {
@@ -58,7 +59,7 @@ const PDF_CONTENT_STRING = (
 );
 
 // Genera la estructura XML UBL 2.1 oficial para Siigo Nube adaptada para cualquier Empresa Compradora
-async function generarEstructuraSiigoIdentica(datos: FacturaDatos): Promise<{
+async function generarEstructuraSiigoIdentica(datos: FacturaDatos, numeroFacturaCustom?: string | null): Promise<{
   attachedXml: string;
   invoiceXml: string;
   zipFilename: string;
@@ -76,7 +77,7 @@ async function generarEstructuraSiigoIdentica(datos: FacturaDatos): Promise<{
   const buyerNameEscaped = escapeXml(datos.BuyerName || 'MI EMPRESA SAS');
 
   const fecha = datos.Fecha || new Date().toISOString().split('T')[0];
-  const numFactura = `FE-${Math.floor(10000 + Math.random() * 90000)}`;
+  const numFactura = numeroFacturaCustom || `FE-${Math.floor(10000 + Math.random() * 90000)}`;
   
   // Generar CUFE y CUDE de 96 caracteres hexadecimales
   const cufeSha384 = Array.from({ length: 96 }, () => Math.floor(Math.random() * 16).toString(16)).join('');
@@ -295,6 +296,8 @@ ${productosXmlLines}
 }
 
 export async function POST(req: NextRequest) {
+  const startTime = performance.now();
+
   try {
     // 1. Control de Tasa (Rate Limiting) por IP - Máximo 10 peticiones por minuto
     const clientIp = getClientIp(req);
@@ -339,13 +342,79 @@ export async function POST(req: NextRequest) {
     }
 
     // Sanitización de entradas del cliente
-    const buyerNitInput = rawBuyerNit ? rawBuyerNit.replace(/[^0-9]/g, '').substring(0, 15) : '';
-    const buyerNameInput = rawBuyerName ? sanitizeString(rawBuyerName, 100) : '';
+    const buyerNitInput = rawBuyerNit ? rawBuyerNit.replace(/[^0-9]/g, '').substring(0, 15) : '901584216';
+    const buyerNameInput = rawBuyerName ? sanitizeString(rawBuyerName, 100) : 'MI EMPRESA SAS';
 
-    // 4. Inicializar cliente Google GenAI
+    // 4. Cálculo de SHA-256 de la imagen optimizada (Capa Pre-Gemini)
+    const imageHash = calculateImageHash(buffer);
+    const supabase = getSupabaseClient();
+
+    // =========================================================================
+    // CAPA PRE-GEMINI: BYPASS DE IA SI LA IMAGEN YA FUE PROCESADA
+    // =========================================================================
+    if (supabase) {
+      try {
+        const { data: existingByHash } = await supabase
+          .from('facturas')
+          .select('*')
+          .eq('buyer_nit', buyerNitInput)
+          .eq('image_hash', imageHash)
+          .neq('estado', 'error')
+          .order('creado_en', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+
+        if (existingByHash) {
+          const durationMs = Math.round(performance.now() - startTime);
+          console.log(`[Idempotency] Imagen idéntica encontrada (${imageHash.substring(0, 10)}...). Bypass de Gemini.`);
+
+          const cachedFields: FacturaDatos = {
+            NIT: existingByHash.proveedor_nit || existingByHash.nit || 'N/A',
+            NombreProveedor: existingByHash.proveedor_nombre || `PROVEEDOR ${existingByHash.proveedor_nit || existingByHash.nit}`,
+            BuyerNIT: existingByHash.buyer_nit,
+            BuyerName: existingByHash.buyer_name,
+            Fecha: existingByHash.fecha ? String(existingByHash.fecha) : 'N/A',
+            Subtotal: String(existingByHash.subtotal || '0'),
+            IVA: String(existingByHash.iva || '0'),
+            Total: String(existingByHash.total || '0'),
+            Productos: Array.isArray(existingByHash.productos) ? existingByHash.productos : [],
+          };
+
+          const est = await generarEstructuraSiigoIdentica(cachedFields, existingByHash.numero_factura);
+
+          return NextResponse.json({
+            success: true,
+            duplicate: true,
+            duplicate_type: 'image_hash',
+            existing_id: existingByHash.id,
+            message: 'Esta imagen ya fue procesada. Se recuperaron los datos existentes sin consumir tokens de IA.',
+            filename: file.name,
+            motor_usado: `⚡ Caché Idempotente (${imageHash.substring(0, 8)}...)`,
+            guardado_en_supabase: true,
+            raw_text: existingByHash.texto_extraido,
+            fields: cachedFields,
+            buyer_nit: existingByHash.buyer_nit,
+            buyer_name: existingByHash.buyer_name,
+            nombre_proveedor: existingByHash.proveedor_nombre,
+            productos: cachedFields.Productos,
+            xml_content: existingByHash.xml_content || est.attachedXml,
+            invoice_xml_content: est.invoiceXml,
+            zip_filename: est.zipFilename,
+            xml_filename_inside: est.xmlFilenameInside,
+            pdf_filename_inside: est.pdfFilenameInside,
+            zip_b64: est.zipBase64,
+            image_hash: imageHash,
+            idempotency_key: existingByHash.idempotency_key,
+            duracion_ms: durationMs,
+          });
+        }
+      } catch (errCache) {
+        console.warn('Advertencia en verificación de caché por hash:', errCache);
+      }
+    }
+
+    // 5. Inferencia con Google GenAI (Solo si no estaba en caché de imagen)
     const ai = new GoogleGenAI({ apiKey: apiKeyToUse });
-    
-    // Modelo primario configurado en entorno
     const preferredModel = process.env.GEMINI_MODEL || 'gemini-3.5-flash';
     const modelsToTry = Array.from(new Set([preferredModel, 'gemini-3.5-flash', 'gemini-2.0-flash', 'gemini-1.5-flash']));
 
@@ -355,9 +424,10 @@ export async function POST(req: NextRequest) {
       "Extrae con total precisión: " +
       "1. Datos del Proveedor/Emisor: NIT_Proveedor (solo dígitos) y Nombre_Proveedor (Razón Social del vendedor). " +
       "2. Datos de la Empresa Compradora/Adquirente/Cliente (quien compra o a quien facturan): NIT_Comprador (solo dígitos) y Nombre_Comprador (Razón Social o nombre del cliente/comprador si figura en la factura). " +
-      "3. Datos Generales: Fecha de emisión (YYYY-MM-DD), Subtotal, IVA, Total. " +
-      "4. Lista detallada de Productos (arreglo Productos con: cantidad, descripcion, precio_unitario, total_item). " +
-      "Devuelve un formato JSON estricto con los campos: NIT, NombreProveedor, NIT_Comprador, NombreComprador, Fecha, Subtotal, IVA, Total, TextoExtraido y un arreglo Productos."
+      "3. Datos del Documento: NumeroFactura (ej: BC10 146694, FE-1234, etc. tal como aparece en el encabezado). " +
+      "4. Datos Generales: Fecha de emisión (YYYY-MM-DD), Subtotal, IVA, Total. " +
+      "5. Lista detallada de Productos (arreglo Productos con: cantidad, descripcion, precio_unitario, total_item). " +
+      "Devuelve un formato JSON estricto con los campos: NIT, NombreProveedor, NIT_Comprador, NombreComprador, NumeroFactura, Fecha, Subtotal, IVA, Total, TextoExtraido y un arreglo Productos."
     );
 
     let response = null;
@@ -386,6 +456,7 @@ export async function POST(req: NextRequest) {
                 NombreProveedor: { type: Type.STRING },
                 NIT_Comprador: { type: Type.STRING },
                 NombreComprador: { type: Type.STRING },
+                NumeroFactura: { type: Type.STRING },
                 Fecha: { type: Type.STRING },
                 Subtotal: { type: Type.STRING },
                 IVA: { type: Type.STRING },
@@ -427,6 +498,7 @@ export async function POST(req: NextRequest) {
 
     const detectedBuyerNit = datosJson.NIT_Comprador || buyerNitInput || '901584216';
     const detectedBuyerName = datosJson.NombreComprador || buyerNameInput || 'MI EMPRESA SAS';
+    const rawInvoiceNumber = datosJson.NumeroFactura || null;
 
     const fields: FacturaDatos = {
       NIT: datosJson.NIT || 'N/A',
@@ -440,15 +512,85 @@ export async function POST(req: NextRequest) {
       Productos: datosJson.Productos || [],
     };
 
-    const est = await generarEstructuraSiigoIdentica(fields);
-    
-    // Tag de aislamiento multi-empresa embebido en texto extraído
     const activeBuyerNit = fields.BuyerNIT || '901584216';
-    const rawText = `[NIT_COMPRADOR:${activeBuyerNit}] ${datosJson.TextoExtraido || `[Analizado exitosamente con Google Gemini AI (${modelUsed})]`}`;
 
-    // Guardar en Supabase con la estructura normalizada de Etapa 3
+    // =========================================================================
+    // CAPA POST-GEMINI: IDEMPOTENCY KEY CONTABLE POR NÚMERO DE FACTURA
+    // =========================================================================
+    const accountingKey = generateAccountingIdempotencyKey(activeBuyerNit, fields.NIT, rawInvoiceNumber);
+
+    if (supabase && accountingKey) {
+      try {
+        const { data: existingByKey } = await supabase
+          .from('facturas')
+          .select('*')
+          .eq('idempotency_key', accountingKey)
+          .neq('estado', 'error')
+          .order('creado_en', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+
+        if (existingByKey) {
+          const durationMs = Math.round(performance.now() - startTime);
+          console.log(`[Idempotency] Factura contable duplicada encontrada (${accountingKey}). Reutilizando registro existente.`);
+
+          const cachedFields: FacturaDatos = {
+            NIT: existingByKey.proveedor_nit || existingByKey.nit || fields.NIT,
+            NombreProveedor: existingByKey.proveedor_nombre || fields.NombreProveedor,
+            BuyerNIT: existingByKey.buyer_nit || activeBuyerNit,
+            BuyerName: existingByKey.buyer_name || fields.BuyerName,
+            Fecha: existingByKey.fecha ? String(existingByKey.fecha) : fields.Fecha,
+            Subtotal: String(existingByKey.subtotal || fields.Subtotal),
+            IVA: String(existingByKey.iva || fields.IVA),
+            Total: String(existingByKey.total || fields.Total),
+            Productos: Array.isArray(existingByKey.productos) && existingByKey.productos.length > 0 ? existingByKey.productos : fields.Productos,
+          };
+
+          const est = await generarEstructuraSiigoIdentica(cachedFields, existingByKey.numero_factura || rawInvoiceNumber);
+
+          return NextResponse.json({
+            success: true,
+            duplicate: true,
+            duplicate_type: 'invoice_key',
+            existing_id: existingByKey.id,
+            message: `Esta factura (${existingByKey.numero_factura || rawInvoiceNumber} de ${cachedFields.NombreProveedor}) ya existe en el historial de tu empresa.`,
+            filename: file.name,
+            motor_usado: `🤖 Google Gemini AI (${modelUsed})`,
+            guardado_en_supabase: true,
+            raw_text: existingByKey.texto_extraido,
+            fields: cachedFields,
+            buyer_nit: existingByKey.buyer_nit,
+            buyer_name: existingByKey.buyer_name,
+            nombre_proveedor: existingByKey.proveedor_nombre,
+            productos: cachedFields.Productos,
+            xml_content: existingByKey.xml_content || est.attachedXml,
+            invoice_xml_content: est.invoiceXml,
+            zip_filename: est.zipFilename,
+            xml_filename_inside: est.xmlFilenameInside,
+            pdf_filename_inside: est.pdfFilenameInside,
+            zip_b64: est.zipBase64,
+            image_hash: imageHash,
+            idempotency_key: accountingKey,
+            duracion_ms: durationMs,
+          });
+        }
+      } catch (errKey) {
+        console.warn('Advertencia en verificación de clave contable:', errKey);
+      }
+    }
+
+    // 6. Generación de XML UBL 2.1 sincronizado
+    const est = await generarEstructuraSiigoIdentica(fields, rawInvoiceNumber);
+    const rawText = `[NIT_COMPRADOR:${activeBuyerNit}] ${datosJson.TextoExtraido || `[Analizado exitosamente con Google Gemini AI (${modelUsed})]`}`;
+    const durationMs = Math.round(performance.now() - startTime);
+
+    // Determinar estado: si tiene número de factura válido pasa a completada, de lo contrario requiere revisión
+    const finalEstado = accountingKey ? 'completada' : 'requiere_revision';
+
+    // 7. Persistencia segura en Supabase
     let guardadoEnSupabase = false;
-    const supabase = getSupabaseClient();
+    let createdInvoiceId: string | undefined = undefined;
+
     if (supabase) {
       try {
         const subtotalNum = limpiarValorNumerico(fields.Subtotal) || null;
@@ -456,37 +598,66 @@ export async function POST(req: NextRequest) {
         const totalNum = limpiarValorNumerico(fields.Total) || (subtotalNum !== null && ivaNum !== null ? subtotalNum + ivaNum : null);
         const isoDate = (fields.Fecha && fields.Fecha !== 'N/A' && /^\d{4}-\d{2}-\d{2}$/.test(fields.Fecha)) ? fields.Fecha : null;
 
-        const newSchemaPayload = {
+        const newSchemaPayload: any = {
           proveedor_nit: fields.NIT || 'N/A',
           proveedor_nombre: fields.NombreProveedor || null,
           buyer_nit: activeBuyerNit,
           buyer_name: fields.BuyerName || null,
-          numero_factura: (est as any).invoiceXml ? ((est.invoiceXml.match(/<cbc:ID>([^<]+)<\/cbc:ID>/) || [])[1] || null) : null,
+          numero_factura: rawInvoiceNumber || ((est.invoiceXml.match(/<cbc:ID>([^<]+)<\/cbc:ID>/) || [])[1] || null),
           fecha: isoDate,
           subtotal: subtotalNum,
           iva: ivaNum,
           total: totalNum,
           productos: fields.Productos || [],
-          estado: 'procesada',
+          estado: finalEstado,
+          image_hash: imageHash,
+          idempotency_key: accountingKey,
+          modelo_ia: modelUsed,
+          duracion_ms: durationMs,
           texto_extraido: rawText,
           xml_content: est.attachedXml,
         };
 
-        const { error: insertErr } = await supabase.from('facturas').insert(newSchemaPayload);
-        
-        if (insertErr) {
-          // Retrocompatibilidad con schema anterior mientras se ejecuta la migración
-          await supabase.from('facturas').insert({
-            nit: fields.NIT,
-            fecha: fields.Fecha,
-            subtotal: fields.Subtotal,
-            iva: fields.IVA,
-            total: fields.Total,
-            texto_extraido: rawText,
-            xml_content: est.attachedXml,
-          });
+        const { data: insertedData, error: insertErr } = await supabase
+          .from('facturas')
+          .insert(newSchemaPayload)
+          .select('id')
+          .single();
+
+        if (!insertErr && insertedData) {
+          createdInvoiceId = insertedData.id;
+          guardadoEnSupabase = true;
+        } else if (insertErr) {
+          // Si falló por conflicto único de concurrencia (código 23505), recuperar el registro insertado concurrentemente
+          if (insertErr.code === '23505' && accountingKey) {
+            const { data: concurrentDoc } = await supabase
+              .from('facturas')
+              .select('id')
+              .eq('idempotency_key', accountingKey)
+              .maybeSingle();
+
+            createdInvoiceId = concurrentDoc?.id;
+            guardadoEnSupabase = true;
+          } else {
+            // Retrocompatibilidad con schema anterior mientras se ejecuta la migración
+            const { data: legacyData } = await supabase
+              .from('facturas')
+              .insert({
+                nit: fields.NIT,
+                fecha: fields.Fecha,
+                subtotal: fields.Subtotal,
+                iva: fields.IVA,
+                total: fields.Total,
+                texto_extraido: rawText,
+                xml_content: est.attachedXml,
+              })
+              .select('id')
+              .single();
+
+            createdInvoiceId = legacyData?.id;
+            guardadoEnSupabase = true;
+          }
         }
-        guardadoEnSupabase = true;
       } catch (errDb) {
         console.error('Error al guardar en Supabase:', errDb);
       }
@@ -494,6 +665,8 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({
       success: true,
+      duplicate: false,
+      invoice_id: createdInvoiceId,
       filename: file.name,
       motor_usado: `🤖 Google Gemini AI (${modelUsed})`,
       guardado_en_supabase: guardadoEnSupabase,
@@ -502,6 +675,7 @@ export async function POST(req: NextRequest) {
       buyer_nit: fields.BuyerNIT,
       buyer_name: fields.BuyerName,
       nombre_proveedor: fields.NombreProveedor,
+      numero_factura: rawInvoiceNumber,
       productos: fields.Productos,
       xml_content: est.attachedXml,
       invoice_xml_content: est.invoiceXml,
@@ -509,6 +683,9 @@ export async function POST(req: NextRequest) {
       xml_filename_inside: est.xmlFilenameInside,
       pdf_filename_inside: est.pdfFilenameInside,
       zip_b64: est.zipBase64,
+      image_hash: imageHash,
+      idempotency_key: accountingKey,
+      duracion_ms: durationMs,
     });
 
   } catch (error: any) {

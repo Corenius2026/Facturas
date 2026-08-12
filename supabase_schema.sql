@@ -1,5 +1,5 @@
 -- ==============================================================================
--- ESQUEMA MAESTRO SUPABASE: ANALIZADOR DE FACTURAS (ETAPA 3)
+-- ESQUEMA MAESTRO SUPABASE: ANALIZADOR DE FACTURAS (ETAPA 4 - IDEMPOTENCIA Y CONTROL DE COSTOS)
 -- ==============================================================================
 
 CREATE TABLE IF NOT EXISTS public.facturas (
@@ -15,15 +15,29 @@ CREATE TABLE IF NOT EXISTS public.facturas (
     total            NUMERIC(14,2) DEFAULT NULL,
     productos        JSONB DEFAULT '[]'::jsonb,
     estado           VARCHAR(20) NOT NULL DEFAULT 'procesada',
+    image_hash       VARCHAR(64) DEFAULT NULL,
+    idempotency_key  VARCHAR(64) DEFAULT NULL,
+    modelo_ia        VARCHAR(50) DEFAULT NULL,
+    duracion_ms      INTEGER DEFAULT NULL,
     texto_extraido   TEXT DEFAULT NULL,
     xml_content      TEXT DEFAULT NULL,
     creado_en        TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
--- Índices de consulta rápida
+-- Índices de consulta rápida y control de duplicados
 CREATE INDEX IF NOT EXISTS idx_facturas_buyer_nit ON public.facturas(buyer_nit);
 CREATE INDEX IF NOT EXISTS idx_facturas_fecha ON public.facturas(fecha DESC);
 CREATE INDEX IF NOT EXISTS idx_facturas_creado_en ON public.facturas(creado_en DESC);
+
+-- Índice único parcial para prevención de facturas duplicadas
+CREATE UNIQUE INDEX IF NOT EXISTS idx_facturas_idempotency_unique 
+    ON public.facturas(idempotency_key) 
+    WHERE idempotency_key IS NOT NULL;
+
+-- Índice para búsqueda de imágenes ya procesadas (Pre-IA bypass)
+CREATE INDEX IF NOT EXISTS idx_facturas_image_hash_buyer 
+    ON public.facturas(buyer_nit, image_hash) 
+    WHERE image_hash IS NOT NULL;
 
 -- Habilitar Row Level Security (RLS)
 ALTER TABLE public.facturas ENABLE ROW LEVEL SECURITY;

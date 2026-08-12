@@ -141,14 +141,29 @@ ALTER TABLE public.facturas
     ADD COLUMN IF NOT EXISTS estado           VARCHAR(20)  NOT NULL DEFAULT 'procesada',
     ADD COLUMN IF NOT EXISTS productos        JSONB        DEFAULT '[]'::jsonb;
 
--- 4. Conversión segura de tipos de datos a NUMERIC(14,2) y DATE
+-- 4. Eliminar restricciones DEFAULT y NOT NULL antiguas de tipo VARCHAR ('N/A') para permitir conversión de tipo
+ALTER TABLE public.facturas
+    ALTER COLUMN fecha DROP DEFAULT,
+    ALTER COLUMN fecha DROP NOT NULL,
+    ALTER COLUMN subtotal DROP DEFAULT,
+    ALTER COLUMN iva DROP DEFAULT,
+    ALTER COLUMN total DROP DEFAULT;
+
+-- 5. Conversión segura de tipos de datos a DATE y NUMERIC(14,2)
 ALTER TABLE public.facturas
     ALTER COLUMN fecha TYPE DATE USING public.parse_flexible_date_strict(fecha),
     ALTER COLUMN subtotal TYPE NUMERIC(14,2) USING public.parse_colombian_currency_strict(subtotal),
     ALTER COLUMN iva TYPE NUMERIC(14,2) USING public.parse_colombian_currency_strict(iva),
     ALTER COLUMN total TYPE NUMERIC(14,2) USING public.parse_colombian_currency_strict(total);
 
--- 5. Backfill seguro de metadatos históricos desde XML UBL 2.1 y texto extraído
+-- 6. Establecer los nuevos valores DEFAULT apropiados para tipos numéricos y fecha
+ALTER TABLE public.facturas
+    ALTER COLUMN fecha SET DEFAULT NULL,
+    ALTER COLUMN subtotal SET DEFAULT NULL,
+    ALTER COLUMN iva SET DEFAULT NULL,
+    ALTER COLUMN total SET DEFAULT NULL;
+
+-- 7. Backfill seguro de metadatos históricos desde XML UBL 2.1 y texto extraído
 UPDATE public.facturas
 SET 
     buyer_nit = COALESCE(
@@ -170,7 +185,7 @@ SET
     )
 WHERE xml_content IS NOT NULL;
 
--- 6. Creación de índices optimizados requeridos
+-- 8. Creación de índices optimizados requeridos
 CREATE INDEX IF NOT EXISTS idx_facturas_buyer_nit ON public.facturas(buyer_nit);
 CREATE INDEX IF NOT EXISTS idx_facturas_fecha ON public.facturas(fecha DESC);
 CREATE INDEX IF NOT EXISTS idx_facturas_creado_en ON public.facturas(creado_en DESC);
