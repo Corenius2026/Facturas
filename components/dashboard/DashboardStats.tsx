@@ -2,7 +2,7 @@
 
 import React from 'react';
 import { SupabaseInvoice } from '@/types/invoice';
-import { formatMonetaryDisplay } from '@/lib/siigo-xml';
+import { formatMonetaryDisplay, limpiarValorNumerico } from '@/lib/siigo-xml';
 
 interface DashboardStatsProps {
   history: SupabaseInvoice[];
@@ -15,8 +15,8 @@ export const DashboardStats: React.FC<DashboardStatsProps> = ({ history, activeB
 
   // 2. Suma Total COP
   const totalMonto = history.reduce((acc, curr) => {
-    const val = typeof curr.total === 'number' ? curr.total : parseFloat(String(curr.total || '0').replace(/[^0-9.-]+/g, ''));
-    return acc + (isNaN(val) ? 0 : val);
+    const val = limpiarValorNumerico(curr.total);
+    return acc + val;
   }, 0);
 
   // 3. Facturas en revisión / completadas
