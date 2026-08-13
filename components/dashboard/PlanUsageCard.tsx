@@ -18,9 +18,10 @@ export interface UsageInfo {
 interface PlanUsageCardProps {
   buyerNit?: string;
   buyerName?: string;
+  refreshTrigger?: number;
 }
 
-export const PlanUsageCard: React.FC<PlanUsageCardProps> = ({ buyerNit, buyerName }) => {
+export const PlanUsageCard: React.FC<PlanUsageCardProps> = ({ buyerNit, buyerName, refreshTrigger }) => {
   const [usage, setUsage] = useState<UsageInfo | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
 
@@ -39,10 +40,10 @@ export const PlanUsageCard: React.FC<PlanUsageCardProps> = ({ buyerNit, buyerNam
 
   useEffect(() => {
     fetchUsage();
-    // Re-verificar cada 30 segundos o al cambiar de empresa
+    // Re-verificar cada 30 segundos o reactivamente al procesar una nueva factura
     const interval = setInterval(fetchUsage, 30000);
     return () => clearInterval(interval);
-  }, [buyerNit]);
+  }, [buyerNit, refreshTrigger]);
 
   if (loading || !usage) {
     return (

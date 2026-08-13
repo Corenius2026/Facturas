@@ -62,10 +62,11 @@ export default function MinimarketPOSPage() {
   const [pdfFilenameInside, setPdfFilenameInside] = useState<string>('');
   const [duplicateNotice, setDuplicateNotice] = useState<DuplicateNotice | null>(null);
 
-  // History State
+  // History & Usage State
   const [history, setHistory] = useState<SupabaseInvoice[]>([]);
   const [selectedInvoiceIds, setSelectedInvoiceIds] = useState<string[]>([]);
   const [isDeleting, setIsDeleting] = useState<boolean>(false);
+  const [usageRefreshTrigger, setUsageRefreshTrigger] = useState<number>(0);
 
   // Auth & RBAC State
   const [userRole, setUserRole] = useState<string | null>(null);
@@ -290,7 +291,8 @@ export default function MinimarketPOSPage() {
         setDuplicateNotice(null);
         showToast('¡Factura analizada e integrada con éxito!', 'success');
       }
-      loadHistory();
+      setUsageRefreshTrigger((prev) => prev + 1);
+      loadHistory(activeBuyerNit);
     } catch (err: any) {
       showToast(err.message || 'Error en el procesamiento de la factura', 'error');
     } finally {
@@ -388,7 +390,8 @@ export default function MinimarketPOSPage() {
 
       showToast(data.message || 'Factura(s) eliminada(s) con éxito', 'success');
       setSelectedInvoiceIds((prev) => prev.filter((id) => !idsToDelete.includes(id)));
-      loadHistory();
+      setUsageRefreshTrigger((prev) => prev + 1);
+      loadHistory(buyerNit);
     } catch (err: any) {
       showToast(err.message || 'Error al eliminar las facturas', 'error');
     } finally {
@@ -456,7 +459,11 @@ export default function MinimarketPOSPage() {
           <DashboardStats history={history} activeBuyerName={buyerName} />
 
           {/* Plan & Usage Metrics por Empresa (Etapa 4A) */}
-          <PlanUsageCard buyerNit={buyerNit} buyerName={buyerName} />
+          <PlanUsageCard 
+            buyerNit={buyerNit} 
+            buyerName={buyerName} 
+            refreshTrigger={usageRefreshTrigger} 
+          />
 
           {/* View: Dashboard or Uploader */}
           {(activeTab === 'dashboard' || activeTab === 'uploader') && (
