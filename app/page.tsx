@@ -24,6 +24,7 @@ import {
 import { AppSidebar } from '@/components/layout/AppSidebar';
 import { AppHeader } from '@/components/layout/AppHeader';
 import { DashboardStats } from '@/components/dashboard/DashboardStats';
+import { PlanUsageCard } from '@/components/dashboard/PlanUsageCard';
 import { CompanyModal } from '@/components/company/CompanyModal';
 import { InvoiceUploader } from '@/components/invoice/InvoiceUploader';
 import { ProcessingStatus } from '@/components/invoice/ProcessingStatus';
@@ -453,6 +454,9 @@ export default function MinimarketPOSPage() {
         <main className="flex-1 p-3 sm:p-6 lg:p-8 space-y-4 sm:space-y-6 max-w-7xl w-full mx-auto animate-fade-in">
           {/* Top KPI Metrics (Always visible or in Dashboard) */}
           <DashboardStats history={history} activeBuyerName={buyerName} />
+
+          {/* Plan & Usage Metrics (Etapa 4A) */}
+          <PlanUsageCard />
 
           {/* View: Dashboard or Uploader */}
           {(activeTab === 'dashboard' || activeTab === 'uploader') && (

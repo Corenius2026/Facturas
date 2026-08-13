@@ -7,6 +7,7 @@ import { calculateImageHash, generateAccountingIdempotencyKey } from '@/lib/idem
 import { generarEstructuraSiigo, limpiarValorNumerico } from '@/lib/siigo-xml';
 import { FacturaDatos, ProcesarApiResponse } from '@/types/invoice';
 import { requirePermission } from '@/lib/auth/authorize';
+import { checkInvoiceQuota, consumeInvoiceQuota } from '@/lib/billing/usage';
 
 export const dynamic = 'force-dynamic';
 
@@ -25,6 +26,24 @@ export async function POST(req: NextRequest) {
       return authResult.response;
     }
     const { tenantId, userId } = authResult.context;
+
+    // 0.5. Verificación de Cuota Mensual (Etapa 4A): Bloquear ANTES de procesar si se alcanzó el límite
+    const quotaCheck = await checkInvoiceQuota(tenantId);
+    if (!quotaCheck.allowed) {
+      return NextResponse.json({
+        success: false,
+        error: 'QUOTA_EXCEEDED',
+        detail: quotaCheck.error || `Has alcanzado el límite mensual de facturas de tu ${quotaCheck.planName} (${quotaCheck.limit} facturas).`,
+        message: 'Has alcanzado el límite de facturas de tu plan.',
+        usage: {
+          used: quotaCheck.used,
+          limit: quotaCheck.limit,
+          remaining: quotaCheck.remaining,
+          plan: quotaCheck.plan,
+          plan_name: quotaCheck.planName,
+        }
+      }, { status: 429 });
+    }
 
     // 1. Control de Tasa (Rate Limiting) por IP - Máximo 10 peticiones por minuto
     const clientIp = getClientIp(req);
@@ -393,6 +412,15 @@ export async function POST(req: NextRequest) {
         }
       } catch (errDb) {
         console.error('Error al guardar en Supabase:', errDb);
+      }
+    }
+
+    // 7. Consumo Atómico de Cuota (Etapa 4A): Incrementar contador solo si la nueva factura fue guardada con éxito
+    if (guardadoEnSupabase && tenantId) {
+      try {
+        await consumeInvoiceQuota(tenantId);
+      } catch (errQuota) {
+        console.warn('Error registrando consumo atómico de cuota:', errQuota);
       }
     }
 
