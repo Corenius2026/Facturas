@@ -71,16 +71,19 @@ export async function GET(req: NextRequest) {
       });
     }
 
-    // 3. Consulta de Listado General Optimizado con aislamiento de Tenant
+    // 3. Consulta de Listado General Optimizado (Unificado por Empresa / NIT)
     let query = supabase
       .from('facturas')
       .select('id, proveedor_nit, proveedor_nombre, buyer_nit, buyer_name, numero_factura, fecha, subtotal, iva, total, productos, estado, creado_en')
-      .or(`tenant_id.eq.${tenantId},tenant_id.is.null`)
       .order('creado_en', { ascending: false })
       .limit(100);
 
     if (cleanBuyerNit) {
+      // Si se filtra por la empresa activa, traer todo el historial consolidado de esa empresa (NIT)
       query = query.eq('buyer_nit', cleanBuyerNit);
+    } else {
+      // Si no se especifica empresa, aislar por el tenant del usuario
+      query = query.or(`tenant_id.eq.${tenantId},tenant_id.is.null`);
     }
 
     let rawData: any[] | null = null;
@@ -207,8 +210,13 @@ export async function DELETE(req: NextRequest) {
     let deleteQuery = supabase
       .from('facturas')
       .delete({ count: 'exact' })
-      .in('id', validIds)
-      .or(`tenant_id.eq.${tenantId},tenant_id.is.null`);
+      .in('id', validIds);
+
+    if (cleanBuyerNit) {
+      deleteQuery = deleteQuery.eq('buyer_nit', cleanBuyerNit);
+    } else {
+      deleteQuery = deleteQuery.or(`tenant_id.eq.${tenantId},tenant_id.is.null`);
+    }
 
     const { error, count } = await deleteQuery;
 
