@@ -163,8 +163,16 @@ export async function POST(req: NextRequest) {
 
     // 5. Inferencia con Google GenAI (Solo si no estaba en caché de imagen)
     const ai = new GoogleGenAI({ apiKey: apiKeyToUse });
-    const preferredModel = process.env.GEMINI_MODEL || 'gemini-3.5-flash';
-    const modelsToTry = Array.from(new Set([preferredModel, 'gemini-3.5-flash', 'gemini-2.0-flash', 'gemini-1.5-flash']));
+    const preferredModel = process.env.GEMINI_MODEL || 'gemini-3.5-flash-lite';
+    const modelsToTry = Array.from(new Set([
+      preferredModel,
+      'gemini-3.5-flash-lite',
+      'gemini-3.1-flash-lite',
+      'gemini-3.5-flash',
+      'gemini-3-flash',
+      'Gemini-2.5-Flash-Lite',
+      'Gemini-3.6-Flash'
+    ]));
 
     const prompt = (
       "Eres un experto contable especializado en software Siigo y facturación electrónica de la DIAN en Colombia. " +
