@@ -115,30 +115,72 @@ export async function generarEstructuraSiigo(
   const ivaNum = limpiarValorNumerico(datos.IVA);
   const totalNum = limpiarValorNumerico(datos.Total) || (subtotalNum + ivaNum);
 
+  // 1. Determinar valores totales consistentes
+  let effectiveSubtotal = subtotalNum;
+  let effectiveIva = ivaNum;
+  let effectiveTotal = totalNum;
+
+  if (effectiveTotal === 0 && effectiveSubtotal > 0) {
+    effectiveTotal = effectiveSubtotal + effectiveIva;
+  }
+  if (effectiveSubtotal === 0 && effectiveTotal > 0) {
+    effectiveSubtotal = effectiveIva > 0 ? Math.max(0, effectiveTotal - effectiveIva) : effectiveTotal;
+  }
+
   const productosList = (datos.Productos && datos.Productos.length > 0)
     ? datos.Productos
-    : [{ cantidad: '1', descripcion: 'MERCANCIA GENERAL', precio_unitario: String(subtotalNum), total_item: String(subtotalNum) }];
+    : [{ cantidad: '1', descripcion: 'MERCANCIA GENERAL', precio_unitario: String(effectiveSubtotal), total_item: String(effectiveSubtotal) }];
 
   const lineCount = productosList.length;
 
+  // 2. Suma bruta de los ítems extraídos para detectar si vienen con IVA incluido
+  const rawItemsTotal = productosList.reduce((acc, p) => {
+    const cant = limpiarValorNumerico(p.cantidad) || 1;
+    const tot = limpiarValorNumerico(p.total_item) || (limpiarValorNumerico(p.precio_unitario) * cant);
+    return acc + tot;
+  }, 0);
+
+  const hasIva = effectiveIva > 0;
+  // Si la suma de los productos está más cerca del Total que del Subtotal, los precios traen IVA incluido
+  const isGrossList = hasIva && effectiveTotal > 0 && Math.abs(rawItemsTotal - effectiveTotal) < Math.abs(rawItemsTotal - effectiveSubtotal);
+
+  // Tasa efectiva de IVA (ej. 19% o proporcional)
+  const effectiveIvaRate = hasIva && effectiveSubtotal > 0 ? (effectiveIva / effectiveSubtotal) : (hasIva ? 0.19 : 0.0);
+  const ivaPercentStr = (effectiveIvaRate * 100).toFixed(2);
+
   const productosXmlLines = productosList.map((p, index) => {
     const cantNum = limpiarValorNumerico(p.cantidad) || 1;
-    const totalItemNum = limpiarValorNumerico(p.total_item) || (limpiarValorNumerico(p.precio_unitario) * cantNum);
-    const precioUnitNum = limpiarValorNumerico(p.precio_unitario) || (totalItemNum / cantNum);
-    const lineIva = Math.round(totalItemNum * 0.19 * 100) / 100;
+    const rawTotalItem = limpiarValorNumerico(p.total_item) || (limpiarValorNumerico(p.precio_unitario) * cantNum) || (effectiveSubtotal / lineCount);
+    
+    // Si la lista de productos venía con IVA incluido, desglosamos la Base Gravable (sin IVA) para Siigo
+    let lineBaseAmount: number;
+    let lineIvaAmount: number;
+
+    if (isGrossList) {
+      lineBaseAmount = Math.round((rawTotalItem / (1 + effectiveIvaRate)) * 100) / 100;
+      lineIvaAmount = Math.round((rawTotalItem - lineBaseAmount) * 100) / 100;
+    } else if (hasIva) {
+      lineBaseAmount = Math.round(rawTotalItem * 100) / 100;
+      lineIvaAmount = Math.round((lineBaseAmount * effectiveIvaRate) * 100) / 100;
+    } else {
+      lineBaseAmount = Math.round(rawTotalItem * 100) / 100;
+      lineIvaAmount = 0.0;
+    }
+
+    const unitPriceBase = cantNum > 0 ? (lineBaseAmount / cantNum) : lineBaseAmount;
     const descEscaped = escapeXml(p.descripcion || 'PRODUCTO');
 
     return `    <cac:InvoiceLine>
       <cbc:ID>${index + 1}</cbc:ID>
       <cbc:InvoicedQuantity unitCode="94">${cantNum.toFixed(2)}</cbc:InvoicedQuantity>
-      <cbc:LineExtensionAmount currencyID="COP">${totalItemNum.toFixed(2)}</cbc:LineExtensionAmount>
+      <cbc:LineExtensionAmount currencyID="COP">${lineBaseAmount.toFixed(2)}</cbc:LineExtensionAmount>
       <cac:TaxTotal>
-        <cbc:TaxAmount currencyID="COP">${lineIva.toFixed(2)}</cbc:TaxAmount>
+        <cbc:TaxAmount currencyID="COP">${lineIvaAmount.toFixed(2)}</cbc:TaxAmount>
         <cac:TaxSubtotal>
-          <cbc:TaxableAmount currencyID="COP">${totalItemNum.toFixed(2)}</cbc:TaxableAmount>
-          <cbc:TaxAmount currencyID="COP">${lineIva.toFixed(2)}</cbc:TaxAmount>
+          <cbc:TaxableAmount currencyID="COP">${lineBaseAmount.toFixed(2)}</cbc:TaxableAmount>
+          <cbc:TaxAmount currencyID="COP">${lineIvaAmount.toFixed(2)}</cbc:TaxAmount>
           <cac:TaxCategory>
-            <cbc:Percent>19.00</cbc:Percent>
+            <cbc:Percent>${ivaPercentStr}</cbc:Percent>
             <cac:TaxScheme>
               <cbc:ID>01</cbc:ID>
               <cbc:Name>IVA</cbc:Name>
@@ -153,7 +195,7 @@ export async function generarEstructuraSiigo(
         </cac:StandardItemIdentification>
       </cac:Item>
       <cac:Price>
-        <cbc:PriceAmount currencyID="COP">${precioUnitNum.toFixed(2)}</cbc:PriceAmount>
+        <cbc:PriceAmount currencyID="COP">${unitPriceBase.toFixed(2)}</cbc:PriceAmount>
         <cbc:BaseQuantity unitCode="94">1.00</cbc:BaseQuantity>
       </cac:Price>
     </cac:InvoiceLine>`;
@@ -223,12 +265,12 @@ export async function generarEstructuraSiigo(
     </cac:Party>
   </cac:AccountingCustomerParty>
   <cac:TaxTotal>
-    <cbc:TaxAmount currencyID="COP">${ivaNum.toFixed(2)}</cbc:TaxAmount>
+    <cbc:TaxAmount currencyID="COP">${effectiveIva.toFixed(2)}</cbc:TaxAmount>
     <cac:TaxSubtotal>
-      <cbc:TaxableAmount currencyID="COP">${subtotalNum.toFixed(2)}</cbc:TaxableAmount>
-      <cbc:TaxAmount currencyID="COP">${ivaNum.toFixed(2)}</cbc:TaxAmount>
+      <cbc:TaxableAmount currencyID="COP">${effectiveSubtotal.toFixed(2)}</cbc:TaxableAmount>
+      <cbc:TaxAmount currencyID="COP">${effectiveIva.toFixed(2)}</cbc:TaxAmount>
       <cac:TaxCategory>
-        <cbc:Percent>19.00</cbc:Percent>
+        <cbc:Percent>${ivaPercentStr}</cbc:Percent>
         <cac:TaxScheme>
           <cbc:ID>01</cbc:ID>
           <cbc:Name>IVA</cbc:Name>
@@ -237,13 +279,13 @@ export async function generarEstructuraSiigo(
     </cac:TaxSubtotal>
   </cac:TaxTotal>
   <cac:LegalMonetaryTotal>
-    <cbc:LineExtensionAmount currencyID="COP">${subtotalNum.toFixed(2)}</cbc:LineExtensionAmount>
-    <cbc:TaxExclusiveAmount currencyID="COP">${subtotalNum.toFixed(2)}</cbc:TaxExclusiveAmount>
-    <cbc:TaxInclusiveAmount currencyID="COP">${totalNum.toFixed(2)}</cbc:TaxInclusiveAmount>
+    <cbc:LineExtensionAmount currencyID="COP">${effectiveSubtotal.toFixed(2)}</cbc:LineExtensionAmount>
+    <cbc:TaxExclusiveAmount currencyID="COP">${effectiveSubtotal.toFixed(2)}</cbc:TaxExclusiveAmount>
+    <cbc:TaxInclusiveAmount currencyID="COP">${effectiveTotal.toFixed(2)}</cbc:TaxInclusiveAmount>
     <cbc:AllowanceTotalAmount currencyID="COP">0.00</cbc:AllowanceTotalAmount>
     <cbc:ChargeTotalAmount currencyID="COP">0.00</cbc:ChargeTotalAmount>
     <cbc:PrepaidAmount currencyID="COP">0.00</cbc:PrepaidAmount>
-    <cbc:PayableAmount currencyID="COP">${totalNum.toFixed(2)}</cbc:PayableAmount>
+    <cbc:PayableAmount currencyID="COP">${effectiveTotal.toFixed(2)}</cbc:PayableAmount>
   </cac:LegalMonetaryTotal>
 ${productosXmlLines}
 </Invoice>`;
