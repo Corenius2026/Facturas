@@ -455,8 +455,8 @@ export default function MinimarketPOSPage() {
           {/* Top KPI Metrics (Always visible or in Dashboard) */}
           <DashboardStats history={history} activeBuyerName={buyerName} />
 
-          {/* Plan & Usage Metrics (Etapa 4A) */}
-          <PlanUsageCard />
+          {/* Plan & Usage Metrics por Empresa (Etapa 4A) */}
+          <PlanUsageCard buyerNit={buyerNit} buyerName={buyerName} />
 
           {/* View: Dashboard or Uploader */}
           {(activeTab === 'dashboard' || activeTab === 'uploader') && (

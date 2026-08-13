@@ -44,12 +44,82 @@ export interface QuotaCheckResult {
 }
 
 /**
- * Consulta el consumo actual y límites del plan para el tenant autenticado.
- * NUNCA confía en parámetros enviados desde el cliente.
+ * Resuelve o ancla el Tenant unívocamente al NIT de la Empresa.
+ * Esto evita ataques Sybil (crear múltiples cuentas para tener 30 facturas cada una).
  */
-export async function getCurrentUsage(explicitTenantId?: string): Promise<TenantUsageResult> {
+export async function getCompanyTenantId(
+  buyerNit?: string | null,
+  buyerName?: string | null,
+  fallbackTenantId?: string | null
+): Promise<string> {
+  const cleanNit = (buyerNit || '').replace(/[^0-9]/g, '').trim().substring(0, 15);
+  if (!cleanNit) return fallbackTenantId || '';
+
+  const supabase = await createClient();
+
+  // 1. Buscar si ya existe un tenant registrado con este NIT
+  const { data: existingTenant } = await supabase
+    .from('tenants')
+    .select('id, nombre, nit')
+    .eq('nit', cleanNit)
+    .maybeSingle();
+
+  if (existingTenant) {
+    return existingTenant.id;
+  }
+
+  // 2. Si no existe por NIT pero tenemos fallbackTenantId, asignar este NIT al tenant actual
+  if (fallbackTenantId) {
+    const { data: currentTenant } = await supabase
+      .from('tenants')
+      .select('id, nit')
+      .eq('id', fallbackTenantId)
+      .maybeSingle();
+
+    if (currentTenant && !currentTenant.nit) {
+      await supabase
+        .from('tenants')
+        .update({
+          nit: cleanNit,
+          nombre: buyerName ? buyerName.trim() : `Empresa NIT ${cleanNit}`,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', fallbackTenantId);
+      return fallbackTenantId;
+    }
+  }
+
+  // 3. Crear tenant específico para esta Empresa / NIT
+  const orgName = buyerName ? buyerName.trim() : `Empresa NIT ${cleanNit}`;
+  const slug = `empresa-${cleanNit}`;
+
+  const { data: newTenant } = await supabase
+    .from('tenants')
+    .insert({
+      nombre: orgName,
+      nit: cleanNit,
+      slug: slug,
+      status: 'active'
+    })
+    .select('id')
+    .maybeSingle();
+
+  return newTenant?.id || fallbackTenantId || '';
+}
+
+/**
+ * Consulta el consumo actual y límites del plan para el tenant o empresa autenticada.
+ */
+export async function getCurrentUsage(explicitTenantId?: string, buyerNit?: string): Promise<TenantUsageResult> {
   try {
     let tenantId = explicitTenantId;
+
+    if (buyerNit) {
+      const companyTenant = await getCompanyTenantId(buyerNit, null, explicitTenantId);
+      if (companyTenant) {
+        tenantId = companyTenant;
+      }
+    }
 
     if (!tenantId) {
       const authContext = await getCurrentTenant();
@@ -159,8 +229,8 @@ export async function getCurrentUsage(explicitTenantId?: string): Promise<Tenant
 /**
  * Valida si el tenant tiene cuota disponible ANTES de invocar el motor de IA (Gemini).
  */
-export async function checkInvoiceQuota(explicitTenantId?: string): Promise<QuotaCheckResult> {
-  const usage = await getCurrentUsage(explicitTenantId);
+export async function checkInvoiceQuota(explicitTenantId?: string, buyerNit?: string): Promise<QuotaCheckResult> {
+  const usage = await getCurrentUsage(explicitTenantId, buyerNit);
 
   if (!usage.allowed) {
     return {

@@ -15,12 +15,18 @@ export interface UsageInfo {
   allowed: boolean;
 }
 
-export const PlanUsageCard: React.FC = () => {
+interface PlanUsageCardProps {
+  buyerNit?: string;
+  buyerName?: string;
+}
+
+export const PlanUsageCard: React.FC<PlanUsageCardProps> = ({ buyerNit, buyerName }) => {
   const [usage, setUsage] = useState<UsageInfo | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
 
   const fetchUsage = () => {
-    fetch('/api/usage')
+    const url = buyerNit ? `/api/usage?buyer_nit=${encodeURIComponent(buyerNit)}` : '/api/usage';
+    fetch(url)
       .then((res) => res.json())
       .then((data) => {
         if (data.success && data.usage) {
@@ -33,10 +39,10 @@ export const PlanUsageCard: React.FC = () => {
 
   useEffect(() => {
     fetchUsage();
-    // Re-verificar cada 60 segundos
-    const interval = setInterval(fetchUsage, 60000);
+    // Re-verificar cada 30 segundos o al cambiar de empresa
+    const interval = setInterval(fetchUsage, 30000);
     return () => clearInterval(interval);
-  }, []);
+  }, [buyerNit]);
 
   if (loading || !usage) {
     return (
@@ -76,7 +82,7 @@ export const PlanUsageCard: React.FC = () => {
           <div>
             <div className="flex items-center gap-2">
               <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                Plan Activo
+                Plan de {buyerName || (buyerNit ? `NIT ${buyerNit}` : 'la Empresa')}
               </span>
               <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider bg-[#E09145]/15 text-[#E09145] border border-[#E09145]/30">
                 {usage.planName || usage.plan.toUpperCase()}

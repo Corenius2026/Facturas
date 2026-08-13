@@ -4,7 +4,7 @@ import { getCurrentUsage } from '@/lib/billing/usage';
 
 export const dynamic = 'force-dynamic';
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
     const authContext = await getCurrentTenant();
 
@@ -19,7 +19,11 @@ export async function GET() {
       );
     }
 
-    const usage = await getCurrentUsage(authContext.tenantId);
+    const { searchParams } = new URL(request.url);
+    const rawBuyerNit = searchParams.get('buyer_nit');
+    const cleanBuyerNit = rawBuyerNit ? rawBuyerNit.replace(/[^0-9]/g, '').substring(0, 15) : undefined;
+
+    const usage = await getCurrentUsage(authContext.tenantId, cleanBuyerNit);
 
     return NextResponse.json({
       success: true,
