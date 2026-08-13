@@ -39,6 +39,21 @@ export const InvoiceUploader: React.FC<InvoiceUploaderProps> = ({
 
   return (
     <div className="space-y-4">
+      {/* Hidden file input accessible from everywhere in the uploader */}
+      <input
+        type="file"
+        ref={fileInputRef}
+        onChange={(e) => {
+          if (e.target.files && e.target.files.length > 0) {
+            onFileSelect(e.target.files[0]);
+            // Reset value so selecting the same file again triggers onChange
+            e.target.value = '';
+          }
+        }}
+        accept="image/*"
+        className="hidden"
+      />
+
       {/* Drag & Drop Area / Document Viewer */}
       {previewUrl ? (
         <div className="border border-border rounded-xl bg-card overflow-hidden">
@@ -46,18 +61,32 @@ export const InvoiceUploader: React.FC<InvoiceUploaderProps> = ({
             <span className="text-xs font-bold text-[#E09145] uppercase tracking-wider">
               Documento Cargado
             </span>
-            <button
-              type="button"
-              onClick={onClearFile}
-              className="text-xs font-semibold text-muted-foreground hover:text-destructive transition-colors flex items-center gap-1"
-            >
-              <X className="w-3.5 h-3.5" />
-              <span>Cambiar imagen</span>
-            </button>
+            <div className="flex items-center gap-3">
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                className="text-xs font-semibold text-[#E09145] hover:text-[#E09145]/80 transition-colors flex items-center gap-1.5"
+              >
+                <ImageIcon className="w-3.5 h-3.5" />
+                <span>Cambiar imagen</span>
+              </button>
+              <button
+                type="button"
+                onClick={onClearFile}
+                title="Quitar imagen"
+                className="text-xs font-semibold text-muted-foreground hover:text-destructive transition-colors p-0.5"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
           </div>
 
           <div className="p-4 flex flex-col items-center justify-center bg-muted/20">
-            <div className="relative w-full max-w-xs mx-auto rounded-lg overflow-hidden border border-border bg-background">
+            <div 
+              onClick={() => fileInputRef.current?.click()}
+              className="relative w-full max-w-xs mx-auto rounded-lg overflow-hidden border border-border bg-background cursor-pointer hover:border-[#E09145]/50 transition-colors"
+              title="Haz clic para cambiar la imagen"
+            >
               <img
                 src={previewUrl}
                 alt="Vista previa factura"
@@ -84,18 +113,6 @@ export const InvoiceUploader: React.FC<InvoiceUploaderProps> = ({
               : 'border-border hover:border-[#E09145]/60 hover:bg-muted/30'
           }`}
         >
-          <input
-            type="file"
-            ref={fileInputRef}
-            onChange={(e) => {
-              if (e.target.files && e.target.files.length > 0) {
-                onFileSelect(e.target.files[0]);
-              }
-            }}
-            accept="image/*"
-            className="hidden"
-          />
-
           <div className="flex flex-col items-center justify-center min-h-[160px]">
             <div className="w-12 h-12 rounded-2xl bg-[#292C35] text-[#E09145] flex items-center justify-center mb-3">
               <UploadCloud className="w-6 h-6" />

@@ -210,13 +210,17 @@ export default function MinimarketPOSPage() {
       return;
     }
 
+    // Resetear resultados de la factura anterior para habilitar de inmediato el botón de procesar
+    setFields(null);
+    setXmlContent('');
+    setDuplicateNotice(null);
+
     try {
       const optResult = await optimizeInvoiceImage(file, 1800, 0.84);
 
       setSelectedFile(optResult.file);
       setPreviewUrl(URL.createObjectURL(optResult.file));
       setOptimizationStats(optResult.stats);
-      setDuplicateNotice(null);
     } catch (err: any) {
       console.error('Error al optimizar imagen en cliente:', err);
       setSelectedFile(file);
@@ -493,6 +497,9 @@ export default function MinimarketPOSPage() {
                       setSelectedFile(null);
                       setPreviewUrl('');
                       setOptimizationStats(null);
+                      setFields(null);
+                      setXmlContent('');
+                      setDuplicateNotice(null);
                     }}
                     onProcessInvoice={processInvoice}
                   />
