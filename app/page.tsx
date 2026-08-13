@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { Receipt, CheckCircle2 } from 'lucide-react';
+import { createClient } from '@/lib/supabase/client';
 import { optimizeInvoiceImage } from '@/lib/image-optimizer';
 import {
   generarEstructuraSiigo,
@@ -65,6 +66,11 @@ export default function MinimarketPOSPage() {
   const [selectedInvoiceIds, setSelectedInvoiceIds] = useState<string[]>([]);
   const [isDeleting, setIsDeleting] = useState<boolean>(false);
 
+  // Auth & RBAC State
+  const [userRole, setUserRole] = useState<string | null>(null);
+  const [userName, setUserName] = useState<string | null>(null);
+  const [tenantName, setTenantName] = useState<string | null>(null);
+
   // Toast Notifications
   const [toast, setToast] = useState<ToastType | null>(null);
 
@@ -101,6 +107,35 @@ export default function MinimarketPOSPage() {
     }
   };
 
+  // Sincronizar contexto de sesión y RBAC de forma inmediata (Cliente + Servidor)
+  useEffect(() => {
+    const supabase = createClient();
+
+    // 1. Sincronización instantánea desde la sesión local del navegador
+    supabase.auth.getUser().then(({ data: { user } }) => {
+      if (user) {
+        const metaName = user.user_metadata?.full_name || user.user_metadata?.name || (user.email ? user.email.split('@')[0] : 'Usuario');
+        setUserName(String(metaName).trim());
+        setUserRole('owner');
+        setTenantName(`Organización de ${String(metaName).trim()}`);
+      }
+    }).catch((err) => console.warn('Error leyendo usuario en cliente:', err));
+
+    // 2. Sincronización completa autorizada desde el servidor de base de datos
+    fetch('/api/auth/me')
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.success && data.isAuthenticated) {
+          if (data.role) setUserRole(data.role);
+          if (data.user?.nombre || data.user?.email) {
+            setUserName(data.user?.nombre || data.user?.email);
+          }
+          if (data.tenant?.nombre) setTenantName(data.tenant?.nombre);
+        }
+      })
+      .catch((err) => console.warn('Error sincronizando contexto de sesión:', err));
+  }, []);
+
   // Load Saved Companies from localStorage
   useEffect(() => {
     try {
@@ -125,11 +160,16 @@ export default function MinimarketPOSPage() {
       // 2. Caché local instantáneo mientras responde la red
       const raw = localStorage.getItem('siigo_saved_companies');
       if (raw) {
-        const parsed = JSON.parse(raw);
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          setSavedCompanies(parsed);
-          setBuyerNit(parsed[0].nit);
-          setBuyerName(parsed[0].nombre);
+        try {
+          const parsed = JSON.parse(raw);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            setSavedCompanies(parsed);
+            setBuyerNit(parsed[0].nit);
+            setBuyerName(parsed[0].nombre);
+          }
+        } catch (parseErr) {
+          console.warn('Caché local de empresas inválido, limpiando...', parseErr);
+          localStorage.removeItem('siigo_saved_companies');
         }
       }
     } catch (e) {
@@ -388,6 +428,9 @@ export default function MinimarketPOSPage() {
         onToggleTheme={toggleTheme}
         isMobileOpen={isMobileNavOpen}
         onCloseMobile={() => setIsMobileNavOpen(false)}
+        userRole={userRole}
+        userName={userName}
+        tenantName={tenantName}
       />
 
       {/* Main Workspace */}
@@ -402,6 +445,8 @@ export default function MinimarketPOSPage() {
           isDark={isDark}
           onToggleTheme={toggleTheme}
           onOpenMobileNav={() => setIsMobileNavOpen(true)}
+          userRole={userRole}
+          userName={userName}
         />
 
         {/* Dynamic Page Content */}

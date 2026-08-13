@@ -1,10 +1,20 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSupabaseClient } from '@/lib/supabase';
 import { checkRateLimit, getClientIp } from '@/lib/rate-limit';
+import { requirePermission } from '@/lib/auth/authorize';
+
+export const dynamic = 'force-dynamic';
 
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 export async function GET(req: NextRequest) {
+  // 0. Autorización RBAC en Servidor: Validar permiso 'invoice.view'
+  const authResult = await requirePermission('invoice.view');
+  if (!authResult.success) {
+    return authResult.response;
+  }
+  const { tenantId } = authResult.context;
+
   // 1. Rate Limiting por IP para GET (Máximo 60 peticiones/minuto)
   const clientIp = getClientIp(req);
   const rateLimit = checkRateLimit(`facturas_get_${clientIp}`, 60, 60 * 1000);
@@ -43,10 +53,11 @@ export async function GET(req: NextRequest) {
         .from('facturas')
         .select('*')
         .eq('id', singleId.trim())
+        .or(`tenant_id.eq.${tenantId},tenant_id.is.null`)
         .single();
 
       if (error || !data) {
-        return NextResponse.json({ success: false, error: 'Factura no encontrada.' }, { status: 404 });
+        return NextResponse.json({ success: false, error: 'Factura no encontrada o no pertenece a tu organización.' }, { status: 404 });
       }
 
       return NextResponse.json({
@@ -60,10 +71,11 @@ export async function GET(req: NextRequest) {
       });
     }
 
-    // 3. Consulta de Listado General Optimizado (Etapa 3 con Fallback resiliente)
+    // 3. Consulta de Listado General Optimizado con aislamiento de Tenant
     let query = supabase
       .from('facturas')
       .select('id, proveedor_nit, proveedor_nombre, buyer_nit, buyer_name, numero_factura, fecha, subtotal, iva, total, productos, estado, creado_en')
+      .or(`tenant_id.eq.${tenantId},tenant_id.is.null`)
       .order('creado_en', { ascending: false })
       .limit(100);
 
@@ -137,6 +149,13 @@ export async function GET(req: NextRequest) {
 }
 
 export async function DELETE(req: NextRequest) {
+  // 0. Autorización RBAC en Servidor: Validar permiso 'invoice.delete' (solo Owner y Admin)
+  const authResult = await requirePermission('invoice.delete');
+  if (!authResult.success) {
+    return authResult.response;
+  }
+  const { tenantId } = authResult.context;
+
   // 1. Rate Limiting por IP para DELETE (Máximo 20 eliminaciones/minuto)
   const clientIp = getClientIp(req);
   const rateLimit = checkRateLimit(`facturas_del_${clientIp}`, 20, 60 * 1000);
@@ -188,12 +207,8 @@ export async function DELETE(req: NextRequest) {
     let deleteQuery = supabase
       .from('facturas')
       .delete({ count: 'exact' })
-      .in('id', validIds);
-
-    // Aislamiento por empresa
-    if (cleanBuyerNit) {
-      deleteQuery = deleteQuery.or(`buyer_nit.eq.${cleanBuyerNit},texto_extraido.ilike.%[NIT_COMPRADOR:${cleanBuyerNit}]%`);
-    }
+      .in('id', validIds)
+      .or(`tenant_id.eq.${tenantId},tenant_id.is.null`);
 
     const { error, count } = await deleteQuery;
 

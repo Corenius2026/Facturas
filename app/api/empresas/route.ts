@@ -1,10 +1,20 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSupabaseClient } from '@/lib/supabase';
 import { checkRateLimit, getClientIp } from '@/lib/rate-limit';
+import { requirePermission } from '@/lib/auth/authorize';
+
+export const dynamic = 'force-dynamic';
 
 const DEFAULT_COMPANY = { nit: '901584216', nombre: 'MI EMPRESA SAS' };
 
 export async function GET(req: NextRequest) {
+  // 0. Autorización RBAC en Servidor: Validar permiso 'invoice.view'
+  const authResult = await requirePermission('invoice.view');
+  if (!authResult.success) {
+    return authResult.response;
+  }
+  const { tenantId } = authResult.context;
+
   const clientIp = getClientIp(req);
   const rateLimit = checkRateLimit(`empresas_get_${clientIp}`, 60, 60 * 1000);
   if (!rateLimit.allowed) {
@@ -27,6 +37,7 @@ export async function GET(req: NextRequest) {
     const { data, error } = await supabase
       .from('empresas')
       .select('nit, nombre, creado_en')
+      .or(`tenant_id.eq.${tenantId},tenant_id.is.null`)
       .order('creado_en', { ascending: false });
 
     if (error) {
@@ -54,6 +65,13 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
+  // 0. Autorización RBAC en Servidor: Validar permiso 'company.manage' (Owner y Admin)
+  const authResult = await requirePermission('company.manage');
+  if (!authResult.success) {
+    return authResult.response;
+  }
+  const { tenantId } = authResult.context;
+
   const clientIp = getClientIp(req);
   const rateLimit = checkRateLimit(`empresas_post_${clientIp}`, 30, 60 * 1000);
   if (!rateLimit.allowed) {
@@ -88,7 +106,7 @@ export async function POST(req: NextRequest) {
 
     const { data, error } = await supabase
       .from('empresas')
-      .upsert({ nit: cleanNit, nombre: cleanName }, { onConflict: 'nit' })
+      .upsert({ nit: cleanNit, nombre: cleanName, tenant_id: tenantId }, { onConflict: 'nit' })
       .select()
       .single();
 
@@ -111,6 +129,13 @@ export async function POST(req: NextRequest) {
 }
 
 export async function DELETE(req: NextRequest) {
+  // 0. Autorización RBAC en Servidor: Validar permiso 'company.manage' (Owner y Admin)
+  const authResult = await requirePermission('company.manage');
+  if (!authResult.success) {
+    return authResult.response;
+  }
+  const { tenantId } = authResult.context;
+
   const clientIp = getClientIp(req);
   const rateLimit = checkRateLimit(`empresas_del_${clientIp}`, 30, 60 * 1000);
   if (!rateLimit.allowed) {
@@ -143,7 +168,8 @@ export async function DELETE(req: NextRequest) {
     const { error } = await supabase
       .from('empresas')
       .delete()
-      .eq('nit', cleanNit);
+      .eq('nit', cleanNit)
+      .or(`tenant_id.eq.${tenantId},tenant_id.is.null`);
 
     if (error) {
       throw error;

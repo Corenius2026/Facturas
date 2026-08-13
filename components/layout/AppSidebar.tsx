@@ -1,6 +1,8 @@
 'use client';
 
 import React from 'react';
+import { useRouter } from 'next/navigation';
+import { createClient } from '@/lib/supabase/client';
 import {
   FileText,
   Receipt,
@@ -11,6 +13,7 @@ import {
   ChevronRight,
   Sun,
   Moon,
+  LogOut,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
@@ -24,6 +27,9 @@ interface AppSidebarProps {
   onToggleTheme: () => void;
   isMobileOpen: boolean;
   onCloseMobile: () => void;
+  userRole?: string | null;
+  userName?: string | null;
+  tenantName?: string | null;
 }
 
 export const AppSidebar: React.FC<AppSidebarProps> = ({
@@ -36,7 +42,18 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({
   onToggleTheme,
   isMobileOpen,
   onCloseMobile,
+  userRole,
+  userName,
+  tenantName,
 }) => {
+  const router = useRouter();
+
+  const handleSignOut = async () => {
+    const supabase = createClient();
+    await supabase.auth.signOut();
+    router.push('/login');
+    router.refresh();
+  };
   const navItems = [
     {
       id: 'dashboard' as const,
@@ -58,18 +75,20 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({
   const sidebarContent = (
     <div className="flex flex-col h-full bg-[#17181D] border-r border-[#292C35] text-slate-100 select-none">
       {/* Brand Header */}
-      <div className="p-6">
+      <div className="p-6 pb-4">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-[#E09145] text-[#17181D] flex items-center justify-center font-bold">
+          <div className="w-10 h-10 rounded-xl bg-[#E09145] text-[#17181D] flex items-center justify-center font-bold shrink-0">
             <Receipt className="w-5 h-5" />
           </div>
-          <div>
-            <span className="font-bold text-base tracking-tight text-white block leading-none">
-              FacturaAI
+          <div className="min-w-0">
+            <span className="font-bold text-base tracking-tight text-white block leading-none truncate">
+              {tenantName || 'Mi Organización'}
             </span>
-            <span className="text-[10px] font-semibold text-[#FCD9B8]/80 tracking-wider uppercase mt-1 block">
-              Contabilidad
-            </span>
+            <div className="flex items-center gap-1.5 mt-1">
+              <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider bg-[#292C35] text-[#FCD9B8] border border-[#292C35]">
+                {userRole ? userRole.toUpperCase() : 'OWNER'}
+              </span>
+            </div>
           </div>
         </div>
       </div>
@@ -128,14 +147,25 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({
           <ChevronRight className="w-4 h-4 text-slate-500 group-hover:text-[#E09145] group-hover:translate-x-0.5 transition-all shrink-0" />
         </button>
 
-        {/* Theme Toggle Button */}
-        <div className="flex items-center justify-between pt-2">
-          <span className="text-xs text-slate-400 font-medium">Tema</span>
+        {/* Actions: Theme Toggle & Logout */}
+        <div className="flex items-center justify-between pt-2 border-t border-[#292C35]/60">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={handleSignOut}
+            className="h-8 px-2.5 text-xs text-slate-400 hover:text-destructive hover:bg-destructive/10 rounded-lg gap-2"
+            title="Cerrar sesión"
+          >
+            <LogOut className="w-3.5 h-3.5" />
+            <span>Salir</span>
+          </Button>
+
           <Button
             variant="ghost"
             size="icon"
             onClick={onToggleTheme}
             className="h-8 w-8 text-slate-400 hover:text-[#FCD9B8] hover:bg-[#292C35] rounded-lg transition-transform active:scale-90"
+            title="Cambiar tema"
           >
             {isDark ? <Sun className="w-4 h-4 text-[#E09145]" /> : <Moon className="w-4 h-4" />}
           </Button>

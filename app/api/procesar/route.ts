@@ -6,6 +6,9 @@ import { validateImageBuffer } from '@/lib/file-validator';
 import { calculateImageHash, generateAccountingIdempotencyKey } from '@/lib/idempotency';
 import { generarEstructuraSiigo, limpiarValorNumerico } from '@/lib/siigo-xml';
 import { FacturaDatos, ProcesarApiResponse } from '@/types/invoice';
+import { requirePermission } from '@/lib/auth/authorize';
+
+export const dynamic = 'force-dynamic';
 
 function sanitizeString(input: string, maxLen: number = 100): string {
   if (!input) return '';
@@ -16,6 +19,13 @@ export async function POST(req: NextRequest) {
   const startTime = performance.now();
 
   try {
+    // 0. Autorización RBAC en Servidor: Validar permiso 'invoice.process'
+    const authResult = await requirePermission('invoice.process');
+    if (!authResult.success) {
+      return authResult.response;
+    }
+    const { tenantId, userId } = authResult.context;
+
     // 1. Control de Tasa (Rate Limiting) por IP - Máximo 10 peticiones por minuto
     const clientIp = getClientIp(req);
     const rateLimit = checkRateLimit(`procesar_${clientIp}`, 10, 60 * 1000);
@@ -320,6 +330,8 @@ export async function POST(req: NextRequest) {
         const isoDate = (fields.Fecha && fields.Fecha !== 'N/A' && /^\d{4}-\d{2}-\d{2}$/.test(fields.Fecha)) ? fields.Fecha : null;
 
         const newSchemaPayload: any = {
+          tenant_id: tenantId,
+          user_id: userId,
           proveedor_nit: fields.NIT || 'N/A',
           proveedor_nombre: fields.NombreProveedor || null,
           buyer_nit: activeBuyerNit,
