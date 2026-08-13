@@ -19,15 +19,15 @@ export const InvoiceProductTable: React.FC<InvoiceProductTableProps> = ({ produc
         </span>
       </div>
 
-      <div className="overflow-x-auto">
+      <div className="overflow-x-auto max-h-[224px] overflow-y-auto">
         <table className="w-full text-left text-sm border-collapse">
-          <thead>
-            <tr className="border-b border-border text-muted-foreground">
-              <th className="py-4 px-6 font-medium text-center w-16">#</th>
-              <th className="py-4 px-6 font-medium text-center w-24">Cantidad</th>
-              <th className="py-4 px-6 font-medium">Descripción del Ítem</th>
-              <th className="py-4 px-6 font-medium text-right">Precio Unitario</th>
-              <th className="py-4 px-6 font-medium text-right">Total Ítem</th>
+          <thead className="sticky top-0 bg-card z-10 border-b border-border">
+            <tr className="text-muted-foreground">
+              <th className="py-3 px-6 font-semibold text-center w-16 bg-card">#</th>
+              <th className="py-3 px-6 font-semibold text-center w-24 bg-card">Cantidad</th>
+              <th className="py-3 px-6 font-semibold bg-card">Descripción del Ítem</th>
+              <th className="py-3 px-6 font-semibold text-right bg-card">Precio Unitario</th>
+              <th className="py-3 px-6 font-semibold text-right bg-card">Total Ítem</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-border/50">
@@ -36,21 +36,21 @@ export const InvoiceProductTable: React.FC<InvoiceProductTableProps> = ({ produc
                 <td colSpan={5} className="py-12 px-6 text-center text-muted-foreground">
                   <Package className="w-8 h-8 mx-auto mb-3 text-muted-foreground/30" />
                   <p className="text-sm font-semibold">No se detectaron productos individuales</p>
-                  <p className="text-xs mt-1">Se generará un ítem de mercancía general para Siigo Nube</p>
+                  <p className="text-xs mt-1">Se generará un ítem de mercancía general</p>
                 </td>
               </tr>
             ) : (
               productos.map((prod, index) => (
                 <tr key={index} className="hover:bg-muted/20 transition-colors">
-                  <td className="py-4 px-6 text-center text-muted-foreground">{index + 1}</td>
-                  <td className="py-4 px-6 text-center font-mono text-muted-foreground">
+                  <td className="py-3 px-6 text-center text-muted-foreground">{index + 1}</td>
+                  <td className="py-3 px-6 text-center font-mono text-muted-foreground">
                     {prod.cantidad || '1'}
                   </td>
-                  <td className="py-4 px-6 font-medium text-foreground">{prod.descripcion || 'PRODUCTO'}</td>
-                  <td className="py-4 px-6 text-right font-mono text-muted-foreground">
+                  <td className="py-3 px-6 font-medium text-foreground">{prod.descripcion || 'PRODUCTO'}</td>
+                  <td className="py-3 px-6 text-right font-mono text-muted-foreground">
                     {formatMonetaryDisplay(prod.precio_unitario)}
                   </td>
-                  <td className="py-4 px-6 text-right font-mono font-medium text-foreground">
+                  <td className="py-3 px-6 text-right font-mono font-bold text-foreground">
                     {formatMonetaryDisplay(prod.total_item)}
                   </td>
                 </tr>

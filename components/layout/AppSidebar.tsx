@@ -56,19 +56,26 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({
   ];
 
   const sidebarContent = (
-    <div className="flex flex-col h-full bg-background border-r border-border text-foreground">
+    <div className="flex flex-col h-full bg-[#17181D] border-r border-[#292C35] text-slate-100 select-none">
       {/* Brand Header */}
       <div className="p-6">
         <div className="flex items-center gap-3">
-          <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center text-primary">
+          <div className="w-10 h-10 rounded-xl bg-[#E09145] text-[#17181D] flex items-center justify-center font-bold">
             <Receipt className="w-5 h-5" />
           </div>
-          <span className="font-semibold text-base tracking-tight text-foreground">FacturaAI</span>
+          <div>
+            <span className="font-bold text-base tracking-tight text-white block leading-none">
+              FacturaAI
+            </span>
+            <span className="text-[10px] font-semibold text-[#FCD9B8]/80 tracking-wider uppercase mt-1 block">
+              Contabilidad
+            </span>
+          </div>
         </div>
       </div>
 
       {/* Navigation Links */}
-      <div className="flex-1 px-4 space-y-1 overflow-y-auto">
+      <div className="flex-1 px-4 space-y-1.5 overflow-y-auto">
         {navItems.map((item) => {
           const Icon = item.icon;
           const isActive = activeTab === item.id;
@@ -79,54 +86,58 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({
                 onTabChange(item.id);
                 onCloseMobile();
               }}
-              className={`w-full flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium transition-colors ${
+              className={`w-full flex items-center gap-3.5 px-4 py-3 rounded-xl text-sm font-bold transition-colors ${
                 isActive
-                  ? 'bg-accent text-foreground'
-                  : 'text-muted-foreground hover:text-foreground hover:bg-accent/50'
+                  ? 'bg-[#E09145] text-[#17181D]'
+                  : 'text-slate-400 hover:text-white hover:bg-[#292C35]'
               }`}
             >
-              <Icon className={`w-4 h-4 ${isActive ? 'text-foreground' : 'text-muted-foreground'}`} />
-              <span>{item.label}</span>
+              <Icon
+                className={`w-4 h-4 ${
+                  isActive ? 'text-[#17181D]' : 'text-slate-400 group-hover:text-[#E09145]'
+                }`}
+              />
+              <span className="flex-1 text-left">{item.label}</span>
             </button>
           );
         })}
       </div>
 
       {/* Active Company Switcher in Footer */}
-      <div className="p-4 space-y-4">
+      <div className="p-4 space-y-3 border-t border-[#292C35]">
         <button
           onClick={() => {
             onOpenCompanyModal();
             onCloseMobile();
           }}
-          className="w-full flex items-center justify-between text-left group"
+          className="w-full flex items-center justify-between p-3 rounded-xl border border-[#292C35] bg-[#292C35]/50 hover:bg-[#292C35] hover:border-[#E09145]/40 transition-all duration-200 text-left group hover:scale-[1.01] active:scale-[0.98] shadow-sm"
         >
           <div className="flex items-center gap-3 min-w-0">
-            <div className="w-8 h-8 rounded bg-accent flex items-center justify-center shrink-0">
-              <Building2 className="w-4 h-4 text-muted-foreground" />
+            <div className="w-8 h-8 rounded-lg bg-[#17181D] text-[#E09145] flex items-center justify-center shrink-0 group-hover:bg-[#E09145]/15 transition-colors">
+              <Building2 className="w-4 h-4" />
             </div>
             <div className="min-w-0">
-              <span className="block text-sm font-medium text-foreground truncate">
+              <span className="block text-xs font-bold text-slate-200 group-hover:text-[#FCD9B8] transition-colors truncate">
                 {activeBuyerName || 'MI EMPRESA SAS'}
               </span>
-              <span className="block text-xs text-muted-foreground">
+              <span className="block text-[10px] text-slate-400 font-mono">
                 NIT: {activeBuyerNit || '901584216'}
               </span>
             </div>
           </div>
-          <ChevronRight className="w-4 h-4 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
+          <ChevronRight className="w-4 h-4 text-slate-500 group-hover:text-[#E09145] group-hover:translate-x-0.5 transition-all shrink-0" />
         </button>
 
         {/* Theme Toggle Button */}
-        <div className="flex items-center justify-between pt-2 border-t border-border">
-          <span className="text-xs text-muted-foreground">Tema</span>
+        <div className="flex items-center justify-between pt-2">
+          <span className="text-xs text-slate-400 font-medium">Tema</span>
           <Button
             variant="ghost"
             size="icon"
             onClick={onToggleTheme}
-            className="h-8 w-8 text-muted-foreground"
+            className="h-8 w-8 text-slate-400 hover:text-[#FCD9B8] hover:bg-[#292C35] rounded-lg transition-transform active:scale-90"
           >
-            {isDark ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
+            {isDark ? <Sun className="w-4 h-4 text-[#E09145]" /> : <Moon className="w-4 h-4" />}
           </Button>
         </div>
       </div>

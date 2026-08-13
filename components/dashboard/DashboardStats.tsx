@@ -24,23 +24,31 @@ export const DashboardStats: React.FC<DashboardStatsProps> = ({ history, activeB
   const completedCount = history.filter((item) => item.estado === 'completada' || item.estado === 'procesada').length;
 
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 pb-8 border-b border-border">
+    <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 pb-6 border-b border-border">
       {/* Total Compras */}
-      <div className="flex flex-col p-5 rounded-2xl bg-sky-50/50 dark:bg-sky-950/20 border border-sky-100 dark:border-sky-900/50">
-        <span className="text-sm font-semibold text-sky-600 dark:text-sky-400 mb-1">Total Compras</span>
-        <span className="text-3xl sm:text-4xl font-black tracking-tight text-foreground">
+      <div className="flex flex-col p-6 rounded-2xl bg-card border border-border">
+        <span className="text-xs font-bold text-[#E09145] uppercase tracking-wider mb-1.5">
+          Total Compras
+        </span>
+        <span className="text-3xl sm:text-4xl font-black tracking-tight text-foreground font-mono">
           {formatMonetaryDisplay(totalMonto)}
         </span>
-        <span className="text-xs text-muted-foreground mt-2">{activeBuyerName || 'Empresa activa'}</span>
+        <span className="text-xs text-muted-foreground mt-2 font-medium">
+          {activeBuyerName || 'Empresa activa'}
+        </span>
       </div>
 
       {/* Facturas Procesadas */}
-      <div className="flex flex-col p-5 rounded-2xl bg-indigo-50/50 dark:bg-indigo-950/20 border border-indigo-100 dark:border-indigo-900/50">
-        <span className="text-sm font-semibold text-indigo-600 dark:text-indigo-400 mb-1">Facturas Procesadas</span>
-        <span className="text-3xl sm:text-4xl font-black tracking-tight text-foreground">
+      <div className="flex flex-col p-6 rounded-2xl bg-card border border-border">
+        <span className="text-xs font-bold text-[#E09145] uppercase tracking-wider mb-1.5">
+          Facturas Procesadas
+        </span>
+        <span className="text-3xl sm:text-4xl font-black tracking-tight text-foreground font-mono">
           {totalCount}
         </span>
-        <span className="text-xs text-muted-foreground mt-2">{completedCount} integradas en Siigo</span>
+        <span className="text-xs text-muted-foreground mt-2 font-medium">
+          Documentos registrados
+        </span>
       </div>
     </div>
   );

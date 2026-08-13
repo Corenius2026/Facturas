@@ -13,17 +13,17 @@ export const ToastNotification: React.FC<ToastProps> = ({ toast }) => {
 
   return (
     <div
-      className={`fixed bottom-6 right-6 z-50 flex items-center gap-3 px-5 py-3 rounded-xl border shadow-2xl backdrop-blur-md text-sm font-semibold transition-all ${
+      className={`fixed bottom-6 right-6 z-50 flex items-center gap-3 px-5 py-3 rounded-xl border shadow-lg text-sm font-bold transition-all ${
         toast.type === 'error'
-          ? 'bg-[#001D39] border-red-500 text-red-200'
+          ? 'bg-[#17181D] border-destructive text-destructive'
           : toast.type === 'warning'
-          ? 'bg-[#001D39] border-amber-500 text-amber-200'
-          : 'bg-[#001D39] border-[#4E8EA2] text-[#BDD8E9]'
+          ? 'bg-[#17181D] border-[#E09145] text-[#E09145]'
+          : 'bg-[#17181D] border-[#292C35] text-[#FCD9B8]'
       }`}
     >
-      {toast.type === 'error' && <AlertTriangle className="w-5 h-5 text-red-400" />}
-      {toast.type === 'warning' && <AlertTriangle className="w-5 h-5 text-amber-400" />}
-      {toast.type === 'success' && <CheckCircle2 className="w-5 h-5 text-[#7BBDE8]" />}
+      {toast.type === 'error' && <AlertTriangle className="w-5 h-5 text-destructive shrink-0" />}
+      {toast.type === 'warning' && <AlertTriangle className="w-5 h-5 text-[#E09145] shrink-0" />}
+      {toast.type === 'success' && <CheckCircle2 className="w-5 h-5 text-[#E09145] shrink-0" />}
       <span>{toast.message}</span>
     </div>
   );

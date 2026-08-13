@@ -104,7 +104,7 @@ export async function POST(req: NextRequest) {
             duplicate: true,
             duplicate_type: 'image_hash',
             existing_id: existingByHash.id,
-            message: 'Esta imagen ya fue procesada. Se recuperaron los datos existentes sin consumir tokens de IA.',
+            message: 'Esta imagen ya fue procesada. Se recuperaron los datos existentes.',
             filename: file.name,
             motor_usado: `⚡ Caché Idempotente (${imageHash.substring(0, 8)}...)`,
             guardado_en_supabase: true,

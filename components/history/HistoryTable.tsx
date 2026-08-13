@@ -15,6 +15,7 @@ import { SupabaseInvoice } from '@/types/invoice';
 import { formatMonetaryDisplay } from '@/lib/siigo-xml';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { DownloadFormatModal } from './DownloadFormatModal';
 
 interface HistoryTableProps {
   history: SupabaseInvoice[];
@@ -25,7 +26,7 @@ interface HistoryTableProps {
   onToggleSelect: (id: string) => void;
   onDeleteSelected: (ids?: string[]) => void;
   onRefreshHistory: () => void;
-  onDownloadXml: (invoiceId: string, nit: string) => void;
+  onDownloadXml?: (invoiceId: string, nit: string) => void;
 }
 
 export const HistoryTable: React.FC<HistoryTableProps> = ({
@@ -37,9 +38,9 @@ export const HistoryTable: React.FC<HistoryTableProps> = ({
   onToggleSelect,
   onDeleteSelected,
   onRefreshHistory,
-  onDownloadXml,
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
+  const [downloadingInvoice, setDownloadingInvoice] = useState<SupabaseInvoice | null>(null);
 
   // Filtrado reactivo en memoria por NIT, Razón Social o Número de Factura
   const filteredHistory = useMemo(() => {
@@ -217,9 +218,9 @@ export const HistoryTable: React.FC<HistoryTableProps> = ({
                     <td className="py-4 px-6 text-right whitespace-nowrap">
                       <div className="flex items-center justify-end gap-2">
                         <button
-                          onClick={() => onDownloadXml(item.id, provNit)}
+                          onClick={() => setDownloadingInvoice(item)}
                           className="p-2 text-muted-foreground hover:text-foreground transition-colors"
-                          title="Descargar XML"
+                          title="Descargar factura en varios formatos"
                         >
                           <Download className="w-4 h-4" />
                         </button>
@@ -240,6 +241,13 @@ export const HistoryTable: React.FC<HistoryTableProps> = ({
           </tbody>
         </table>
       </div>
+
+      {/* Modal selector de formato */}
+      <DownloadFormatModal
+        invoice={downloadingInvoice}
+        buyerNit={buyerNit}
+        onClose={() => setDownloadingInvoice(null)}
+      />
     </div>
   );
 };

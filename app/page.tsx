@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { Receipt } from 'lucide-react';
+import { Receipt, CheckCircle2 } from 'lucide-react';
 import { optimizeInvoiceImage } from '@/lib/image-optimizer';
 import {
   generarEstructuraSiigo,
@@ -26,6 +26,7 @@ import { DashboardStats } from '@/components/dashboard/DashboardStats';
 import { CompanyModal } from '@/components/company/CompanyModal';
 import { InvoiceUploader } from '@/components/invoice/InvoiceUploader';
 import { ProcessingStatus } from '@/components/invoice/ProcessingStatus';
+import { InvoiceLoadingCard } from '@/components/invoice/InvoiceLoadingCard';
 import { InvoiceDetailCard } from '@/components/invoice/InvoiceDetailCard';
 import { InvoiceProductTable } from '@/components/invoice/InvoiceProductTable';
 import { HistoryTable } from '@/components/history/HistoryTable';
@@ -103,20 +104,33 @@ export default function MinimarketPOSPage() {
   // Load Saved Companies from localStorage
   useEffect(() => {
     try {
-      const saved = localStorage.getItem('siigo_saved_companies');
-      if (saved) {
-        const parsed = JSON.parse(saved);
+      // 1. Cargar desde API de Supabase
+      fetch('/api/empresas')
+        .then((res) => res.json())
+        .then((data) => {
+          if (data.success && Array.isArray(data.empresas)) {
+            setSavedCompanies(data.empresas);
+            if (data.empresas.length > 0) {
+              setBuyerNit(data.empresas[0].nit);
+              setBuyerName(data.empresas[0].nombre);
+            } else {
+              setBuyerNit('');
+              setBuyerName('');
+            }
+            localStorage.setItem('siigo_saved_companies', JSON.stringify(data.empresas));
+          }
+        })
+        .catch((e) => console.warn('Error sincronizando empresas de Supabase:', e));
+
+      // 2. Caché local instantáneo mientras responde la red
+      const raw = localStorage.getItem('siigo_saved_companies');
+      if (raw) {
+        const parsed = JSON.parse(raw);
         if (Array.isArray(parsed) && parsed.length > 0) {
           setSavedCompanies(parsed);
           setBuyerNit(parsed[0].nit);
           setBuyerName(parsed[0].nombre);
         }
-      } else {
-        const defaultCompany = { nit: '901584216', nombre: 'MI EMPRESA SAS' };
-        setSavedCompanies([defaultCompany]);
-        setBuyerNit(defaultCompany.nit);
-        setBuyerName(defaultCompany.nombre);
-        localStorage.setItem('siigo_saved_companies', JSON.stringify([defaultCompany]));
       }
     } catch (e) {
       console.warn('Error leyendo empresas de localStorage:', e);
@@ -155,24 +169,17 @@ export default function MinimarketPOSPage() {
     }
 
     try {
-      showToast('Optimizando imagen para OCR...', 'warning');
       const optResult = await optimizeInvoiceImage(file, 1800, 0.84);
 
       setSelectedFile(optResult.file);
       setPreviewUrl(URL.createObjectURL(optResult.file));
       setOptimizationStats(optResult.stats);
       setDuplicateNotice(null);
-
-      showToast(
-        `Imagen optimizada: ${(optResult.stats.originalSize / 1024).toFixed(0)} KB → ${(optResult.stats.optimizedSize / 1024).toFixed(0)} KB (-${optResult.stats.reductionPercentage}%)`,
-        'success'
-      );
     } catch (err: any) {
       console.error('Error al optimizar imagen en cliente:', err);
       setSelectedFile(file);
       setPreviewUrl(URL.createObjectURL(file));
       setOptimizationStats(null);
-      showToast('No se pudo comprimir la imagen en el cliente, se enviará original', 'warning');
     }
   };
 
@@ -181,7 +188,6 @@ export default function MinimarketPOSPage() {
     if (!selectedFile || isProcessing) return;
 
     setIsProcessing(true);
-    showToast('Analizando factura con IA y generando estructura para Siigo...', 'warning');
 
     try {
       const formData = new FormData();
@@ -239,7 +245,6 @@ export default function MinimarketPOSPage() {
           type: result.duplicate_type,
           message: result.message,
         });
-        showToast(result.message || 'Factura ya registrada previamente.', 'warning');
       } else {
         setDuplicateNotice(null);
         showToast('¡Factura analizada e integrada con éxito!', 'success');
@@ -255,7 +260,6 @@ export default function MinimarketPOSPage() {
   // Download XML On-Demand from History
   const downloadHistoryXml = async (invoiceId: string, nit: string) => {
     try {
-      showToast('Recuperando XML de la factura...', 'warning');
       const res = await fetch(`/api/facturas?id=${encodeURIComponent(invoiceId)}`);
       const data = await res.json();
 
@@ -272,7 +276,7 @@ export default function MinimarketPOSPage() {
   };
 
   // Company Actions
-  const handleSaveCompany = (nit: string, name: string) => {
+  const handleSaveCompany = async (nit: string, name: string) => {
     const updated = savedCompanies.filter((c) => c.nit !== nit);
     updated.unshift({ nit, nombre: name });
     setSavedCompanies(updated);
@@ -280,9 +284,20 @@ export default function MinimarketPOSPage() {
     setBuyerName(name);
     localStorage.setItem('siigo_saved_companies', JSON.stringify(updated));
     showToast(`Empresa "${name}" guardada y activada`, 'success');
+
+    // Sincronizar en la base de datos de Supabase en segundo plano
+    try {
+      await fetch('/api/empresas', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ nit, nombre: name }),
+      });
+    } catch (e) {
+      console.warn('Error sincronizando empresa con BD:', e);
+    }
   };
 
-  const handleDeleteCompany = (nit: string) => {
+  const handleDeleteCompany = async (nit: string) => {
     const updated = savedCompanies.filter((c) => c.nit !== nit);
     setSavedCompanies(updated);
     localStorage.setItem('siigo_saved_companies', JSON.stringify(updated));
@@ -291,6 +306,17 @@ export default function MinimarketPOSPage() {
       setBuyerName(updated[0].nombre);
     }
     showToast('Empresa eliminada de la lista', 'warning');
+
+    // Sincronizar eliminación en Supabase
+    try {
+      await fetch('/api/empresas', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ nit }),
+      });
+    } catch (e) {
+      console.warn('Error eliminando empresa de BD:', e);
+    }
   };
 
   // Batch Delete Actions
@@ -306,7 +332,6 @@ export default function MinimarketPOSPage() {
     }
 
     setIsDeleting(true);
-    showToast('Eliminando registros seleccionados...', 'warning');
 
     try {
       const res = await fetch('/api/facturas', {
@@ -386,34 +411,40 @@ export default function MinimarketPOSPage() {
 
           {/* View: Dashboard or Uploader */}
           {(activeTab === 'dashboard' || activeTab === 'uploader') && (
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 lg:gap-6 items-start">
-              {/* Left Column: Upload Dropzone */}
-              <div className="lg:col-span-5 space-y-4 sm:space-y-6">
-                <InvoiceUploader
-                  selectedFile={selectedFile}
-                  previewUrl={previewUrl}
-                  isProcessing={isProcessing}
-                  optimizationStats={optimizationStats}
-                  onFileSelect={handleFileSelect}
-                  onClearFile={() => {
-                    setSelectedFile(null);
-                    setPreviewUrl('');
-                    setOptimizationStats(null);
-                  }}
-                  onProcessInvoice={processInvoice}
-                />
-              </div>
+            <div className="space-y-6">
+              {/* Duplicate Notice (if applicable) */}
+              {duplicateNotice && duplicateNotice.isDuplicate && (
+                <div className="flex items-center gap-3 p-3.5 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 dark:bg-emerald-950/40 dark:border-emerald-900/50 dark:text-emerald-300 animate-fade-in shadow-xs">
+                  <CheckCircle2 className="w-5 h-5 shrink-0 text-emerald-600 dark:text-emerald-400" />
+                  <p className="text-sm font-semibold m-0">
+                    {duplicateNotice.message}
+                  </p>
+                </div>
+              )}
 
-              {/* Right Column: Processing Status & Extracted Voucher */}
-              <div className="lg:col-span-7 space-y-6 relative">
-                <ProcessingStatus
-                  isProcessing={isProcessing}
-                  buyerNit={buyerNit}
-                  duplicateNotice={duplicateNotice}
-                />
+              {/* Top Row: Uploader + Invoice Summary / Loading */}
+              <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+                {/* Left Column: Upload Dropzone & Preview */}
+                <div className="lg:col-span-4 space-y-4">
+                  <InvoiceUploader
+                    selectedFile={selectedFile}
+                    previewUrl={previewUrl}
+                    isProcessing={isProcessing}
+                    hasResults={!!fields}
+                    optimizationStats={optimizationStats}
+                    onFileSelect={handleFileSelect}
+                    onClearFile={() => {
+                      setSelectedFile(null);
+                      setPreviewUrl('');
+                      setOptimizationStats(null);
+                    }}
+                    onProcessInvoice={processInvoice}
+                  />
+                </div>
 
-                {fields ? (
-                  <div className="space-y-6 animate-fade-in">
+                {/* Right Column: Invoice Details, Scanning Animation or Empty State */}
+                <div className="lg:col-span-8">
+                  {fields ? (
                     <InvoiceDetailCard
                       fields={fields}
                       buyerName={buyerName}
@@ -426,36 +457,41 @@ export default function MinimarketPOSPage() {
                       }}
                       onDownloadXml={() => {
                         downloadXmlBlob(xmlContent, xmlFilenameInside || 'factura_dian.xml');
-                        showToast('Archivo XML UBL 2.1 descargado', 'success');
+                        showToast('Archivo XML descargado', 'success');
                       }}
                       onCopyXml={() => {
                         if (!xmlContent) return;
                         navigator.clipboard.writeText(xmlContent);
-                        showToast('XML UBL 2.1 copiado al portapapeles', 'success');
+                        showToast('XML copiado al portapapeles', 'success');
                       }}
                       onDownloadCsv={() => {
                         if (!fields) return;
                         downloadSiigoCsvTemplate(fields, productos);
-                        showToast('Plantilla CSV para Siigo descargada', 'success');
+                        showToast('Plantilla CSV descargada', 'success');
                       }}
                     />
-
-                    <InvoiceProductTable productos={productos} />
-                  </div>
-                ) : (
-                  !isProcessing && (
-                    <div className="rounded-2xl border border-border/80 bg-card p-10 text-center shadow-xs">
-                      <div className="w-14 h-14 rounded-2xl bg-primary/10 text-primary flex items-center justify-center mx-auto mb-3">
-                        <Receipt className="w-7 h-7 opacity-80" />
+                  ) : isProcessing ? (
+                    <InvoiceLoadingCard buyerNit={buyerNit} />
+                  ) : (
+                    <div className="rounded-2xl border border-border bg-card p-12 text-center h-full min-h-[360px] flex flex-col items-center justify-center">
+                      <div className="w-14 h-14 rounded-2xl bg-[#292C35] text-[#E09145] flex items-center justify-center mb-3">
+                        <Receipt className="w-7 h-7" />
                       </div>
                       <h3 className="text-base font-bold text-foreground mb-1">Sin Factura Procesada</h3>
-                      <p className="text-xs text-muted-foreground max-w-sm mx-auto">
-                        Carga o arrastra una imagen de factura en el panel izquierdo para extraer automáticamente los datos contables y generar el paquete .ZIP para Siigo Nube.
+                      <p className="text-xs text-muted-foreground max-w-sm">
+                        Carga o arrastra una imagen de factura en el panel izquierdo para extraer automáticamente los datos contables y generar el archivo XML.
                       </p>
                     </div>
-                  )
-                )}
+                  )}
+                </div>
               </div>
+
+              {/* Bottom Full-Width Row: Extracted Products Table */}
+              {fields && productos && (
+                <div className="animate-fade-in w-full">
+                  <InvoiceProductTable productos={productos} />
+                </div>
+              )}
             </div>
           )}
 

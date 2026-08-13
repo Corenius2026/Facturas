@@ -51,3 +51,23 @@ CREATE POLICY "Permitir insercion publica de facturas" ON public.facturas FOR IN
 
 DROP POLICY IF EXISTS "Permitir eliminacion publica de facturas" ON public.facturas;
 CREATE POLICY "Permitir eliminacion publica de facturas" ON public.facturas FOR DELETE USING (true);
+
+-- ==============================================================================
+-- TABLA DE EMPRESAS (PERSISTENCIA MULTI-DISPOSITIVO)
+-- ==============================================================================
+
+CREATE TABLE IF NOT EXISTS public.empresas (
+    nit          VARCHAR(50) PRIMARY KEY,
+    nombre       VARCHAR(200) NOT NULL,
+    creado_en    TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- Habilitar Row Level Security (RLS)
+ALTER TABLE public.empresas ENABLE ROW LEVEL SECURITY;
+
+-- Políticas RLS para empresas
+DROP POLICY IF EXISTS "Permitir lectura publica de empresas" ON public.empresas;
+CREATE POLICY "Permitir lectura publica de empresas" ON public.empresas FOR SELECT USING (true);
+
+DROP POLICY IF EXISTS "Permitir insercion y actualizacion publica de empresas" ON public.empresas;
+CREATE POLICY "Permitir insercion y actualizacion publica de empresas" ON public.empresas FOR ALL USING (true);

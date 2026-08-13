@@ -40,17 +40,17 @@ export const CompanyModal: React.FC<CompanyModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-background/80 backdrop-blur-sm animate-fade-in">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 animate-fade-in">
       <div className="relative w-full max-w-lg">
-        <Card className="shadow-2xl border-border bg-card">
+        <Card className="shadow-xl border-border bg-card">
           <CardHeader className="flex flex-row items-center justify-between pb-4 border-b border-border">
             <div className="flex items-center gap-3">
-              <div className="p-2.5 rounded-xl bg-primary/10 text-primary">
+              <div className="p-2.5 rounded-xl bg-[#292C35] text-[#E09145]">
                 <Building2 className="w-5 h-5" />
               </div>
               <div>
                 <CardTitle className="text-base">Gestión de Empresas</CardTitle>
-                <CardDescription>Configura tus empresas para la generación UBL 2.1 y Siigo Nube</CardDescription>
+                <CardDescription>Configura tus empresas para el aislamiento contable</CardDescription>
               </div>
             </div>
             <Button variant="ghost" size="icon" onClick={onClose} className="rounded-xl h-8 w-8 text-muted-foreground hover:text-foreground">
@@ -89,7 +89,7 @@ export const CompanyModal: React.FC<CompanyModalProps> = ({
                   />
                 </div>
               </div>
-              <Button type="submit" size="sm" className="w-full gap-1.5" disabled={!newNit || !newName}>
+              <Button type="submit" size="sm" className="w-full gap-1.5 font-bold bg-[#E09145] text-[#17181D] hover:bg-[#E09145]/90 border-0" disabled={!newNit || !newName}>
                 <Plus className="w-3.5 h-3.5" />
                 <span>Guardar en Mi Lista</span>
               </Button>
@@ -101,42 +101,46 @@ export const CompanyModal: React.FC<CompanyModalProps> = ({
                 Empresas Disponibles ({savedCompanies.length})
               </label>
               <div className="max-h-60 overflow-y-auto space-y-2 pr-1">
-                {savedCompanies.map((comp) => {
-                  const isActive = comp.nit === activeBuyerNit;
-                  return (
-                    <div
-                      key={comp.nit}
-                      onClick={() => {
-                        onSelectCompany(comp);
-                        onClose();
-                      }}
-                      className={`group flex items-center justify-between p-3 rounded-xl border cursor-pointer transition-all ${
-                        isActive
-                          ? 'border-primary bg-primary/5 text-primary shadow-xs'
-                          : 'border-border bg-card hover:bg-accent hover:text-accent-foreground'
-                      }`}
-                    >
-                      <div className="flex items-center gap-3">
-                        <div className={`p-2 rounded-lg ${isActive ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'}`}>
-                          <Building2 className="w-4 h-4" />
-                        </div>
-                        <div>
-                          <div className="text-xs font-bold flex items-center gap-2">
-                            <span>{comp.nombre}</span>
-                            {isActive && (
-                              <span className="inline-flex items-center gap-1 text-[10px] bg-primary/20 text-primary px-1.5 py-0.2 rounded font-bold">
-                                <Check className="w-3 h-3" /> Activa
-                              </span>
-                            )}
+                {savedCompanies.length === 0 ? (
+                  <div className="p-4 text-center text-xs text-muted-foreground border border-dashed border-border rounded-xl">
+                    No tienes empresas guardadas aún. Agrega una arriba.
+                  </div>
+                ) : (
+                  savedCompanies.map((comp) => {
+                    const isActive = comp.nit === activeBuyerNit;
+                    return (
+                      <div
+                        key={comp.nit}
+                        onClick={() => {
+                          onSelectCompany(comp);
+                          onClose();
+                        }}
+                        className={`group flex items-center justify-between p-3 rounded-xl border cursor-pointer transition-colors ${
+                          isActive
+                            ? 'border-[#E09145] bg-[#E09145]/10 text-foreground'
+                            : 'border-border bg-card hover:bg-muted/40'
+                        }`}
+                      >
+                        <div className="flex items-center gap-3">
+                          <div className={`p-2 rounded-lg ${isActive ? 'bg-[#E09145] text-[#17181D]' : 'bg-muted text-muted-foreground'}`}>
+                            <Building2 className="w-4 h-4" />
                           </div>
-                          <div className="text-[11px] text-muted-foreground font-mono">
-                            NIT: {comp.nit}
+                          <div>
+                            <div className="text-xs font-bold flex items-center gap-2">
+                              <span>{comp.nombre}</span>
+                              {isActive && (
+                                <span className="inline-flex items-center gap-1 text-[10px] bg-[#E09145] text-[#17181D] px-1.5 py-0.5 rounded font-bold">
+                                  <Check className="w-3 h-3" /> Activa
+                                </span>
+                              )}
+                            </div>
+                            <div className="text-[11px] text-muted-foreground font-mono">
+                              NIT: {comp.nit}
+                            </div>
                           </div>
                         </div>
-                      </div>
 
-                      <div className="flex items-center gap-1">
-                        {savedCompanies.length > 1 && (
+                        <div className="flex items-center gap-1">
                           <Button
                             variant="ghost"
                             size="icon"
@@ -149,11 +153,11 @@ export const CompanyModal: React.FC<CompanyModalProps> = ({
                           >
                             <Trash2 className="w-3.5 h-3.5" />
                           </Button>
-                        )}
+                        </div>
                       </div>
-                    </div>
-                  );
-                })}
+                    );
+                  })
+                )}
               </div>
             </div>
 

@@ -39,46 +39,35 @@ export const InvoiceDetailCard: React.FC<InvoiceDetailCardProps> = ({
   return (
     <div className="border border-border rounded-xl bg-card overflow-hidden">
       {/* Header & Actions */}
-      <div className="p-6 border-b border-border flex flex-col md:flex-row md:items-center justify-between gap-6 bg-slate-50/50 dark:bg-slate-900/20">
+      <div className="p-6 border-b border-border flex flex-col md:flex-row md:items-center justify-between gap-6 bg-card">
         <div>
           <h3 className="text-xl font-bold tracking-tight text-foreground mb-1 flex items-center gap-2">
-            <span className="p-1.5 rounded-lg bg-indigo-100 dark:bg-indigo-900/50 text-indigo-600 dark:text-indigo-400">
-              <FileArchive className="w-5 h-5" />
+            <span className="p-1.5 rounded-lg bg-[#292C35] text-[#E09145]">
+              <Receipt className="w-5 h-5" />
             </span>
             Resultados de Factura
           </h3>
-          <p className="text-sm text-muted-foreground flex items-center gap-2 pl-9">
-            <span>UBL 2.1</span>
-            <span>•</span>
-            <span className="font-mono">{zipFilename || 'z08XXXXXXXX.zip'}</span>
+          <p className="text-xs text-muted-foreground pl-8 font-mono">
+            {zipFilename || 'Factura procesada'}
           </p>
         </div>
 
         <div className="flex flex-wrap gap-3">
           <Button
-            onClick={onDownloadZip}
-            className="font-semibold gap-2 bg-indigo-600 hover:bg-indigo-700 text-white"
-          >
-            <Download className="w-4 h-4" />
-            <span>Descargar .ZIP Siigo</span>
-          </Button>
-
-          <Button
             onClick={onDownloadXml}
-            variant="outline"
-            className="gap-2 text-muted-foreground hover:text-foreground"
+            className="gap-2 font-bold bg-[#E09145] text-[#17181D] hover:bg-[#E09145]/90 border-0"
           >
-            <FileCode className="w-4 h-4" />
-            <span className="hidden sm:inline">Descargar XML</span>
+            <FileCode className="w-4 h-4 text-[#17181D]" />
+            <span>Descargar XML</span>
           </Button>
 
           <Button
             onClick={onDownloadCsv}
             variant="outline"
-            className="gap-2 text-muted-foreground hover:text-foreground"
+            className="gap-2 font-semibold text-muted-foreground hover:text-foreground"
           >
             <FileSpreadsheet className="w-4 h-4" />
-            <span className="hidden sm:inline">Plantilla CSV</span>
+            <span>Plantilla CSV</span>
           </Button>
         </div>
       </div>
@@ -88,7 +77,9 @@ export const InvoiceDetailCard: React.FC<InvoiceDetailCardProps> = ({
         <div className="grid grid-cols-1 md:grid-cols-2 gap-y-8 gap-x-12">
           {/* Detalles Generales */}
           <div className="space-y-6">
-            <h4 className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Detalles Generales</h4>
+            <h4 className="text-xs font-bold text-[#E09145] uppercase tracking-wider">
+              Detalles Generales
+            </h4>
             
             <div className="grid grid-cols-2 gap-6">
               <div>
@@ -114,21 +105,25 @@ export const InvoiceDetailCard: React.FC<InvoiceDetailCardProps> = ({
 
           {/* Liquidación Contable */}
           <div className="space-y-6 md:pl-12 md:border-l md:border-border">
-            <h4 className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Liquidación Contable</h4>
+            <h4 className="text-xs font-bold text-[#E09145] uppercase tracking-wider">
+              Liquidación Contable
+            </h4>
             
             <div className="space-y-4">
               <div className="flex justify-between items-center">
                 <span className="text-sm text-muted-foreground">Subtotal</span>
-                <span className="text-base font-semibold text-foreground">{formatMonetaryDisplay(fields.Subtotal)}</span>
+                <span className="text-base font-semibold text-foreground font-mono">{formatMonetaryDisplay(fields.Subtotal)}</span>
               </div>
               <div className="flex justify-between items-center">
                 <span className="text-sm text-muted-foreground">IVA Discriminado</span>
-                <span className="text-base font-semibold text-foreground">{formatMonetaryDisplay(fields.IVA)}</span>
+                <span className="text-base font-semibold text-foreground font-mono">{formatMonetaryDisplay(fields.IVA)}</span>
               </div>
               <div className="h-px bg-border my-2"></div>
-              <div className="flex justify-between items-center p-4 rounded-xl bg-indigo-50/50 dark:bg-indigo-950/30 border border-indigo-100 dark:border-indigo-900/50">
-                <span className="text-base font-bold text-indigo-900 dark:text-indigo-200">Total Factura</span>
-                <span className="text-2xl font-black tracking-tight text-indigo-700 dark:text-indigo-400">{formatMonetaryDisplay(fields.Total)}</span>
+              <div className="flex justify-between items-center p-4 rounded-xl bg-card border border-border">
+                <span className="text-sm font-bold text-foreground">Total Factura</span>
+                <span className="text-2xl font-black tracking-tight text-[#E09145] font-mono">
+                  {formatMonetaryDisplay(fields.Total)}
+                </span>
               </div>
             </div>
           </div>

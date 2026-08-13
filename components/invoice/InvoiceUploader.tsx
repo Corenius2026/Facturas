@@ -9,6 +9,7 @@ interface InvoiceUploaderProps {
   selectedFile: File | null;
   previewUrl: string;
   isProcessing: boolean;
+  hasResults?: boolean;
   optimizationStats: ImageOptimizationStats | null;
   onFileSelect: (file: File) => void;
   onClearFile: () => void;
@@ -19,6 +20,7 @@ export const InvoiceUploader: React.FC<InvoiceUploaderProps> = ({
   selectedFile,
   previewUrl,
   isProcessing,
+  hasResults = false,
   optimizationStats,
   onFileSelect,
   onClearFile,
@@ -36,93 +38,90 @@ export const InvoiceUploader: React.FC<InvoiceUploaderProps> = ({
   };
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h2 className="text-xl font-bold tracking-tight text-foreground">Analizar Factura</h2>
-        <p className="text-sm text-muted-foreground mt-1">Sube una imagen o captura térmica para extraer los datos contables automáticamente.</p>
-      </div>
+    <div className="space-y-4">
+      {/* Drag & Drop Area / Document Viewer */}
+      {previewUrl ? (
+        <div className="border border-border rounded-xl bg-card overflow-hidden">
+          <div className="p-4 border-b border-border flex items-center justify-between">
+            <span className="text-xs font-bold text-[#E09145] uppercase tracking-wider">
+              Documento Cargado
+            </span>
+            <button
+              type="button"
+              onClick={onClearFile}
+              className="text-xs font-semibold text-muted-foreground hover:text-destructive transition-colors flex items-center gap-1"
+            >
+              <X className="w-3.5 h-3.5" />
+              <span>Cambiar imagen</span>
+            </button>
+          </div>
 
-      {/* Drag & Drop Area */}
-      <div
-        onDragOver={(e) => {
-          e.preventDefault();
-          setIsDragOver(true);
-        }}
-        onDragLeave={() => setIsDragOver(false)}
-        onDrop={handleDrop}
-        onClick={() => fileInputRef.current?.click()}
-        className={`relative border-2 border-dashed rounded-xl p-8 text-center cursor-pointer transition-all duration-200 ${
-          isDragOver
-            ? 'border-blue-500 bg-blue-50/50 dark:bg-blue-950/20'
-            : 'border-border/50 hover:border-blue-400/50 hover:bg-blue-50/30 dark:hover:bg-blue-950/10'
-        }`}
-      >
-        <input
-          type="file"
-          ref={fileInputRef}
-          onChange={(e) => {
-            if (e.target.files && e.target.files.length > 0) {
-              onFileSelect(e.target.files[0]);
-            }
-          }}
-          accept="image/*"
-          className="hidden"
-        />
-
-        <div className="flex flex-col items-center justify-center min-h-[160px]">
-          {previewUrl ? (
-            <div className="relative mb-4 w-full max-w-sm mx-auto rounded-lg overflow-hidden border border-border shadow-sm group">
+          <div className="p-4 flex flex-col items-center justify-center bg-muted/20">
+            <div className="relative w-full max-w-xs mx-auto rounded-lg overflow-hidden border border-border bg-background">
               <img
                 src={previewUrl}
-                alt="Vista previa"
-                className="w-full object-contain max-h-[300px]"
+                alt="Vista previa factura"
+                className="w-full object-contain max-h-[260px] mx-auto"
               />
-              <button
-                type="button"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onClearFile();
-                }}
-                className="absolute top-2 right-2 p-2 rounded-md bg-background/80 hover:bg-destructive hover:text-destructive-foreground text-foreground opacity-0 group-hover:opacity-100 transition-opacity backdrop-blur-sm"
-                title="Quitar archivo"
-              >
-                <X className="w-4 h-4" />
-              </button>
             </div>
-          ) : (
-            <div className="w-16 h-16 rounded-full bg-blue-100 dark:bg-blue-900/40 text-blue-600 dark:text-blue-400 flex items-center justify-center mb-4 transition-transform group-hover:scale-110">
-              <UploadCloud className="w-8 h-8" />
-            </div>
-          )}
+            <p className="text-xs font-mono text-muted-foreground mt-2 truncate max-w-[200px]">
+              {selectedFile?.name}
+            </p>
+          </div>
+        </div>
+      ) : (
+        <div
+          onDragOver={(e) => {
+            e.preventDefault();
+            setIsDragOver(true);
+          }}
+          onDragLeave={() => setIsDragOver(false)}
+          onDrop={handleDrop}
+          onClick={() => fileInputRef.current?.click()}
+          className={`border-2 border-dashed rounded-xl p-8 text-center cursor-pointer transition-colors ${
+            isDragOver
+              ? 'border-[#E09145] bg-[#E09145]/10'
+              : 'border-border hover:border-[#E09145]/60 hover:bg-muted/30'
+          }`}
+        >
+          <input
+            type="file"
+            ref={fileInputRef}
+            onChange={(e) => {
+              if (e.target.files && e.target.files.length > 0) {
+                onFileSelect(e.target.files[0]);
+              }
+            }}
+            accept="image/*"
+            className="hidden"
+          />
 
-          <p className="text-sm font-medium text-foreground">
-            {selectedFile ? selectedFile.name : 'Haz clic para seleccionar o arrastra el archivo aquí'}
-          </p>
-          {!selectedFile && (
-            <p className="text-xs text-muted-foreground mt-1">
+          <div className="flex flex-col items-center justify-center min-h-[160px]">
+            <div className="w-12 h-12 rounded-2xl bg-[#292C35] text-[#E09145] flex items-center justify-center mb-3">
+              <UploadCloud className="w-6 h-6" />
+            </div>
+
+            <p className="text-sm font-bold text-foreground">
+              Haz clic para seleccionar o arrastra la factura aquí
+            </p>
+            <p className="text-xs text-muted-foreground mt-1 font-medium">
               JPG, PNG, WebP (máx. 10MB)
             </p>
-          )}
-
-          {optimizationStats && optimizationStats.reductionPercentage > 0 && (
-            <div className="mt-4 flex items-center gap-1.5 text-xs text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/30 px-3 py-1 rounded-full font-medium">
-              <Zap className="w-3 h-3" />
-              <span>Optimizada {optimizationStats.reductionPercentage}% antes de subir</span>
-            </div>
-          )}
+          </div>
         </div>
-      </div>
+      )}
 
-      {/* Process Button */}
-      <Button
-        onClick={onProcessInvoice}
-        disabled={!selectedFile || isProcessing}
-        className="w-full h-12 text-base font-bold bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white shadow-lg shadow-blue-500/25 transition-all border-0 gap-2"
-        size="lg"
-      >
-        <Sparkles className="w-5 h-5" />
-        {isProcessing ? 'Procesando con IA...' : 'Analizar Factura'}
-      </Button>
+      {/* Process Button (Only shown when a file is selected and not yet processed) */}
+      {selectedFile && !hasResults && (
+        <Button
+          onClick={onProcessInvoice}
+          disabled={isProcessing}
+          className="w-full h-11 text-sm font-bold bg-[#E09145] text-[#17181D] hover:bg-[#E09145]/90 transition-colors border-0 gap-2"
+        >
+          <Sparkles className="w-4 h-4 text-[#17181D]" />
+          <span>{isProcessing ? 'Procesando factura...' : 'Analizar Factura'}</span>
+        </Button>
+      )}
     </div>
   );
 };

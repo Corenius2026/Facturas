@@ -17,7 +17,7 @@ const mono = JetBrains_Mono({
 });
 
 export const metadata: Metadata = {
-  title: 'Analizador de Facturas | DIAN UBL 2.1 & Siigo Cloud',
+  title: 'Analizador de Facturas | Sistema Contable',
   description: 'Plataforma SaaS para extracción automática de facturas de compra con IA e integración contable con Siigo Nube.',
 };
 

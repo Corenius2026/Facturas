@@ -26,7 +26,7 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
   onOpenMobileNav,
 }) => {
   return (
-    <header className="sticky top-0 z-20 w-full border-b border-border bg-background/95 backdrop-blur-md px-6 py-4 flex items-center justify-between transition-colors">
+    <header className="sticky top-0 z-20 w-full border-b border-border bg-background px-6 py-4 flex items-center justify-between transition-colors">
       <div className="flex items-center gap-4">
         {/* Mobile menu trigger */}
         <Button
@@ -49,7 +49,7 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
           onClick={onOpenCompanyModal}
           className="hidden sm:flex items-center gap-2 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
         >
-          <Building2 className="w-4 h-4" />
+          <Building2 className="w-4 h-4 text-[#E09145]" />
           <span className="max-w-[140px] truncate">{activeBuyerName || 'MI EMPRESA'}</span>
         </button>
 
@@ -61,15 +61,15 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
           className="h-9 w-9 text-muted-foreground hover:text-foreground"
           title="Cambiar tema"
         >
-          {isDark ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
+          {isDark ? <Sun className="w-4 h-4 text-[#E09145]" /> : <Moon className="w-4 h-4" />}
         </Button>
 
         {/* CTA Button */}
         <Button
           onClick={onOpenUploader}
-          className="h-9 px-4 font-semibold"
+          className="h-9 px-4 font-bold bg-[#E09145] text-[#17181D] hover:bg-[#E09145]/90"
         >
-          <Sparkles className="w-4 h-4 mr-2" />
+          <Sparkles className="w-4 h-4 mr-2 text-[#17181D]" />
           <span className="hidden xs:inline">Analizar Factura</span>
         </Button>
       </div>
