@@ -93,37 +93,37 @@ export default function ResetPasswordPage() {
   };
 
   return (
-    <div className="min-h-screen bg-[#17181D] flex flex-col justify-center items-center p-4 sm:p-6 text-foreground antialiased selection:bg-[#E09145]/20 selection:text-[#E09145]">
+    <div className="min-h-screen bg-slate-50 flex flex-col justify-center items-center p-4 sm:p-6 text-slate-900 antialiased selection:bg-[#E09145]/20 selection:text-[#E09145]">
       {/* Brand Header */}
       <div className="w-full max-w-md mb-8 text-center">
-        <div className="inline-flex items-center justify-center w-12 h-12 rounded-xl bg-[#292C35] text-[#E09145] mb-3 border border-border">
+        <div className="inline-flex items-center justify-center w-12 h-12 rounded-xl bg-amber-50 text-[#E09145] mb-3 border border-amber-200/80 shadow-xs">
           <Receipt className="w-6 h-6" />
         </div>
-        <h1 className="text-2xl font-bold tracking-tight text-white">FacturaAI</h1>
-        <p className="text-xs text-muted-foreground mt-1">
+        <h1 className="text-2xl font-bold tracking-tight text-slate-900">FacturaAI</h1>
+        <p className="text-xs text-slate-500 mt-1">
           Establece una nueva clave para tu cuenta
         </p>
       </div>
 
       {/* Card */}
-      <div className="w-full max-w-md bg-[#292C35]/60 border border-border rounded-2xl p-6 sm:p-8 shadow-xl">
+      <div className="w-full max-w-md bg-white border border-slate-200/80 rounded-2xl p-6 sm:p-8 shadow-xl shadow-slate-200/50">
         {isSuccess ? (
           /* Success Screen */
           <div className="text-center py-4 space-y-4 animate-fade-in">
-            <div className="w-14 h-14 rounded-2xl bg-[#E09145]/10 text-[#E09145] flex items-center justify-center mx-auto border border-[#E09145]/30">
+            <div className="w-14 h-14 rounded-2xl bg-amber-50 text-[#E09145] flex items-center justify-center mx-auto border border-amber-200">
               <CheckCircle2 className="w-7 h-7" />
             </div>
 
             <div>
-              <h2 className="text-lg font-bold text-white">Contraseña actualizada</h2>
-              <p className="text-xs text-muted-foreground mt-2 max-w-xs mx-auto">
+              <h2 className="text-lg font-bold text-slate-900">Contraseña actualizada</h2>
+              <p className="text-xs text-slate-600 mt-2 max-w-xs mx-auto">
                 Tu contraseña ha sido restablecida exitosamente. Redirigiendo al inicio de sesión...
               </p>
             </div>
 
             <div className="pt-2">
               <Link href="/login">
-                <Button className="w-full h-10 font-bold bg-[#E09145] text-[#17181D] hover:bg-[#E09145]/90 border-0">
+                <Button className="w-full h-10 font-bold bg-[#E09145] text-white hover:bg-[#c97c32] border-0 shadow-xs">
                   Ir al inicio de sesión ahora
                 </Button>
               </Link>
@@ -133,15 +133,15 @@ export default function ResetPasswordPage() {
           /* Reset Password Form */
           <>
             <div className="mb-6">
-              <h2 className="text-lg font-bold text-white">Crear nueva contraseña</h2>
-              <p className="text-xs text-muted-foreground mt-0.5">
+              <h2 className="text-lg font-bold text-slate-900">Crear nueva contraseña</h2>
+              <p className="text-xs text-slate-500 mt-0.5">
                 Ingresa y confirma tu nueva clave de acceso
               </p>
             </div>
 
             {/* Error Alert */}
             {errorMessage && (
-              <div className="mb-5 flex items-start gap-2.5 p-3 rounded-xl bg-destructive/10 border border-destructive/20 text-destructive text-xs animate-fade-in font-medium">
+              <div className="mb-5 flex items-start gap-2.5 p-3 rounded-xl bg-red-50 border border-red-200 text-red-700 text-xs animate-fade-in font-medium">
                 <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
                 <span>{errorMessage}</span>
               </div>
@@ -149,11 +149,11 @@ export default function ResetPasswordPage() {
 
             <form onSubmit={handleUpdatePassword} className="space-y-4">
               <div>
-                <label className="block text-xs font-semibold text-muted-foreground mb-1.5">
+                <label className="block text-xs font-semibold text-slate-700 mb-1.5">
                   Nueva Contraseña
                 </label>
                 <div className="relative">
-                  <Lock className="w-4 h-4 text-muted-foreground absolute left-3.5 top-1/2 -translate-y-1/2" />
+                  <Lock className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
                   <Input
                     type="password"
                     placeholder="Mínimo 6 caracteres"
@@ -161,17 +161,17 @@ export default function ResetPasswordPage() {
                     onChange={(e) => setPassword(e.target.value)}
                     required
                     minLength={6}
-                    className="pl-10 h-10 bg-[#17181D] border-border text-sm"
+                    className="pl-10 h-10 bg-white border-slate-300 text-slate-900 placeholder:text-slate-400 text-sm focus-visible:ring-[#E09145]/30 focus-visible:border-[#E09145]"
                   />
                 </div>
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-muted-foreground mb-1.5">
+                <label className="block text-xs font-semibold text-slate-700 mb-1.5">
                   Confirmar Contraseña
                 </label>
                 <div className="relative">
-                  <Lock className="w-4 h-4 text-muted-foreground absolute left-3.5 top-1/2 -translate-y-1/2" />
+                  <Lock className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
                   <Input
                     type="password"
                     placeholder="Repite la nueva contraseña"
@@ -179,7 +179,7 @@ export default function ResetPasswordPage() {
                     onChange={(e) => setConfirmPassword(e.target.value)}
                     required
                     minLength={6}
-                    className="pl-10 h-10 bg-[#17181D] border-border text-sm"
+                    className="pl-10 h-10 bg-white border-slate-300 text-slate-900 placeholder:text-slate-400 text-sm focus-visible:ring-[#E09145]/30 focus-visible:border-[#E09145]"
                   />
                 </div>
               </div>
@@ -187,7 +187,7 @@ export default function ResetPasswordPage() {
               <Button
                 type="submit"
                 disabled={isLoading}
-                className="w-full h-10 font-bold bg-[#E09145] text-[#17181D] hover:bg-[#E09145]/90 border-0 mt-2 gap-2"
+                className="w-full h-10 font-bold bg-[#E09145] text-white hover:bg-[#c97c32] border-0 mt-2 gap-2 shadow-xs"
               >
                 {isLoading ? (
                   <>
@@ -203,10 +203,10 @@ export default function ResetPasswordPage() {
               </Button>
             </form>
 
-            <div className="mt-6 pt-5 border-t border-border/80 text-center">
+            <div className="mt-6 pt-5 border-t border-slate-100 text-center">
               <Link
                 href="/login"
-                className="text-xs text-muted-foreground hover:text-[#E09145] font-semibold transition-colors"
+                className="text-xs text-slate-500 hover:text-[#E09145] font-semibold transition-colors"
               >
                 Cancelar y volver
               </Link>
